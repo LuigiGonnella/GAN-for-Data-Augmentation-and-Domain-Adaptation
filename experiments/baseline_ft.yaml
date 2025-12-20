@@ -1,0 +1,19 @@
+experiment_name: baseline_ft
+
+dataset:
+  type: baseline
+
+model:
+  name: resnet50
+  pretrained: true
+
+training: #no hyperparameter-tuning
+  ht: false
+  layers: 2
+  params:
+    epochs: 10
+    batch_size: 32
+    lr: 0.001
+  
+
+output_dir: results/baseline/ft

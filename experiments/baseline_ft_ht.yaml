@@ -1,0 +1,16 @@
+experiment_name: baseline_ft_ht
+
+dataset:
+  type: baseline
+
+model:
+  name: resnet50
+  pretrained: true
+
+training: #hyperparameter-tuning with random search
+  ht: true
+  layers: 2
+  params:
+    epochs: 6
+
+output_dir: results/baseline/ft_ht

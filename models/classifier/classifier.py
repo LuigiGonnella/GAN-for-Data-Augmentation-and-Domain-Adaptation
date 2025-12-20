@@ -27,14 +27,18 @@ class Classifier(nn.Module):
         for param in self.model.parameters():
             param.requires_grad = True
     
-    def freeze_up_to_layer(self, layer_name):
-        layers_to_freeze = []
+    def freeze_up_to_layer(self, layer_num):
+        """
+        Freeze the first layer_num convolutional layer groups in ResNet.
+        For ResNet: layer_num=1 freezes conv1+bn1+layer1, layer_num=2 freezes up to layer2, etc.
+        """
+        freeze_list = ['conv1', 'bn1']  # Always freeze initial conv and bn
+        for i in range(1, layer_num + 1):
+            freeze_list.append(f'layer{i}')
+        
         for name, param in self.model.named_parameters():
-            if layer_name in name:
-                break
-            layers_to_freeze.append(param)
-        for param in layers_to_freeze:
-            param.requires_grad = False
+            if any(layer in name for layer in freeze_list):
+                param.requires_grad = False
 
     def freeze_specific_layers(self, layer_names):
         for name, param in self.model.named_parameters():

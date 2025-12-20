@@ -1,0 +1,19 @@
+experiment_name: baseline_freeze
+
+dataset:
+  type: baseline
+
+model:
+  name: resnet50
+  pretrained: true
+
+training:
+  ht: false
+  layers: false
+  params:
+    epochs: 10
+    batch_size: 32
+    lr: 0.001
+  
+
+output_dir: results/baseline/freeze

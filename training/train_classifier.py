@@ -9,7 +9,10 @@ import pandas as pd
 from PIL import Image
 from pathlib import Path
 from models.classifier.classifier import Classifier
-from evaluation.metrics import evaluate
+from evaluation.metrics import evaluate, evaluate_with_threshold_tuning
+from evaluation.plots import plot_train_val_stats, plot_cm
+from sklearn.metrics import accuracy_score, f1_score, confusion_matrix, roc_auc_score, precision_recall_curve, roc_curve, auc, recall_score, precision_score
+
 
 
 class DatasetCSV(Dataset):
@@ -41,7 +44,7 @@ class DatasetCSV(Dataset):
             image = self.transform(image)
         return image, label
 
-def test_model(model, config, device):
+def test_model(model, config, device, optimal_threshold):
     transform = transforms.Compose([
         transforms.Resize((224, 224)),
         transforms.ToTensor(),
@@ -51,26 +54,20 @@ def test_model(model, config, device):
     data_path = config.get('data_path', 'data/processed/baseline')
     test_csv = os.path.join(data_path, 'test', 'test.csv')
     test_dataset = DatasetCSV(os.path.join(data_path, 'test'), test_csv, transform=transform)
-    test_loader = DataLoader(test_dataset, batch_size=config['training']['batch_size'], shuffle=False, num_workers=0) 
+    test_loader = DataLoader(test_dataset, batch_size=config['training']['params']['batch_size'], shuffle=False, num_workers=0) 
 
     criterion = nn.CrossEntropyLoss()
-    test_loss, test_accuracy, test_f1, test_roc_auc, test_cm = evaluate(model, test_loader, criterion, device)
-    return test_loss, test_accuracy, test_f1, test_roc_auc, test_cm
+    test_loss, test_accuracy, test_f1, test_recall, test_precision, test_roc_auc, test_cm, _, _ = evaluate(
+        model, test_loader, criterion, device, optimal_threshold
+    )
+    return test_loss, test_accuracy, test_f1, test_recall, test_precision, test_roc_auc, test_cm
 
 
-
-
-def main(config=None):
+def preprocess(config):
     # Load config
-    if isinstance(config, str):
-        with open(config, 'r') as f:
-            config = yaml.safe_load(f)
-    elif config is None:
-        with open('experiments/baseline.yaml', 'r') as f:
-            config = yaml.safe_load(f)
+    if not isinstance(config, dict):
+        return print('Please provide a correct training configuration')
 
-    freezing_strategy = config.get('freezing_strategy', 'freeze_except_last')
-    
     transform = transforms.Compose([
         transforms.Resize((224, 224)),
         transforms.ToTensor(),
@@ -85,82 +82,209 @@ def main(config=None):
     val_csv = os.path.join(data_path, 'val', 'val.csv')
     val_dataset = DatasetCSV(os.path.join(data_path, 'val'), val_csv, transform=transform)
 
-    train_loader = DataLoader(train_dataset, batch_size=config['training']['batch_size'], shuffle=True, num_workers=0)
-    val_loader = DataLoader(val_dataset, batch_size=config['training']['batch_size'], shuffle=False, num_workers=0)
+    train_loader = DataLoader(train_dataset, batch_size=config['training']['params']['batch_size'], shuffle=True, num_workers=0)
+    val_loader = DataLoader(val_dataset, batch_size=config['training']['params']['batch_size'], shuffle=False, num_workers=0)
 
     model = Classifier(num_classes=2, model_name=config['model']['name'], pretrained=True)
-    
 
-    if freezing_strategy == 'no_freeze':
-        model.unfreeze_all_layers()
-    elif freezing_strategy == 'freeze_except_last':
+    return train_loader, val_loader, model
+
+def define_strategy(config, model):
+    if not config['training']['layers']: #total freeze except last fcl
         model.freeze_layers_except_last()
-    elif freezing_strategy == 'freeze_last_2_blocks':
-        model.freeze_up_to_layer(layer_num=2)
-    elif freezing_strategy == 'progressive':
-        model.freeze_layers_except_last()
+        optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=config['training']['params']['lr'], weight_decay=config.get('weight_decay', 1e-5))
+    
+    elif not config['training']['ht']: #finetuning without hyperparameter tuning
+        lr = config['training']['params']['lr']
+        model.freeze_up_to_layer(layer_num=1)
+        # Discriminative learning rates: lower for earlier layers, higher for later layers
+        optimizer = optim.Adam([
+            {'params': model.model.layer2.parameters(), 'lr': lr * 0.1},
+            {'params': model.model.layer3.parameters(), 'lr': lr * 0.3}, #progressive finetuning
+            {'params': model.model.layer4.parameters(), 'lr': lr * 0.5},
+            {'params': model.model.fc.parameters(), 'lr': lr}
+        ], lr=lr, weight_decay=config.get('weight_decay', 1e-5)) 
+
+    else: #finetuning with hyperparameter tuning
+        model.freeze_up_to_layer(layer_num=1)
+        lr = config['training']['params']['lr']
+
+        if (config['training']['params']['optimizer']=='SGD'):
+            optimizer = optim.SGD([
+                {'params': model.model.layer2.parameters(), 'lr': lr * 0.1},
+                {'params': model.model.layer3.parameters(), 'lr': lr * 0.3}, #progressive finetuning
+                {'params': model.model.layer4.parameters(), 'lr': lr * 0.5},
+                {'params': model.model.fc.parameters(), 'lr': lr}
+            ], lr=lr, momentum=config['training']['params']['momentum'], weight_decay=config['training']['params']['weight_decay'])
+
+        elif (config['training']['params']['optimizer']=='Adam'):
+            optimizer = optim.Adam([
+                {'params': model.model.layer2.parameters(), 'lr': lr * 0.1},
+                {'params': model.model.layer3.parameters(), 'lr': lr * 0.3}, #progressive finetuning
+                {'params': model.model.layer4.parameters(), 'lr': lr * 0.5},
+                {'params': model.model.fc.parameters(), 'lr': lr}
+            ], lr=lr, weight_decay=config['training']['params']['weight_decay'])
+
+        elif (config['training']['params']['optimizer']=='AdamW'):
+            optimizer = optim.AdamW([
+                {'params': model.model.layer2.parameters(), 'lr': lr * 0.1},
+                {'params': model.model.layer3.parameters(), 'lr': lr * 0.3}, #progressive finetuning
+                {'params': model.model.layer4.parameters(), 'lr': lr * 0.5},
+                {'params': model.model.fc.parameters(), 'lr': lr}
+            ], lr=lr, weight_decay=config['training']['params']['weight_decay'])
+        
+        elif (config['training']['params']['optimizer']=='RMSprop'):
+            optimizer = optim.RMSprop([
+                {'params': model.model.layer2.parameters(), 'lr': lr * 0.1},
+                {'params': model.model.layer3.parameters(), 'lr': lr * 0.3}, #progressive finetuning
+                {'params': model.model.layer4.parameters(), 'lr': lr * 0.5},
+                {'params': model.model.fc.parameters(), 'lr': lr}
+            ], lr=lr, momentum=config['training']['params']['momentum'], weight_decay=config['training']['params']['weight_decay'])
+    
+    return optimizer
+
+def main(config=None):
+
+    #---------- PREPROCESSING ----------
+    
+    train_loader, val_loader, model = preprocess(config)
+    
+    #---------- STRATEGY ----------
+
+    optimizer = define_strategy(config, model)
+
+    #---------- TRAINING ---------- 
+    #we use DEFAULT THRESHOLD 0.5 to classify images
     
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model.to(device)
     print(f"Using device: {device}")
-
-    optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=config['training']['lr'], weight_decay=config.get('weight_decay', 1e-5))
     
-    class_weight_ratio = config.get('class_weight_ratio', 1)
-    if class_weight_ratio > 1:
-        weights = torch.tensor([1.0, float(class_weight_ratio)], dtype=torch.float32).to(device)
-        criterion = nn.CrossEntropyLoss(weight=weights)
-    else:
-        criterion = nn.CrossEntropyLoss()
+    criterion = nn.CrossEntropyLoss()
 
-    best_val_accuracy = 0.0
+    best_model_accuracy = 0.0
+    best_recall = 0.0
+
+    patience = 3
+    early_stopping_count = 0
+
+    validation_losses_epochs = [] #contains losses after each batch
+    train_losses_epochs = [] #same
+
+    train_accuracy_epochs = []
+    validation_accuracy_epochs = []
     
-    for epoch in range(config['training']['epochs']):
-        print(f'\nStarting epoch {epoch+1}/{config["training"]["epochs"]}...')
+    for epoch in range(config['training']['params']['epochs']):
+        print(f'\nStarting epoch {epoch+1}/{config['training']['params']["epochs"]}...')
+        train_corrects = 0
+        num_samples = 0  # Initialize for this epoch
+        
         model.train()
         running_loss = 0.0
         batch_count = 0
+        all_preds = []
+        all_labels = []
+        all_probs = []
         for images, labels in train_loader:
+            bs = images.shape[0]
+            num_samples += bs
             batch_count += 1
             if batch_count == 1:
                 print(f'First batch loaded successfully! Size: {images.shape}')
             if batch_count % 10 == 0:
                 print(f'Processed {batch_count} batches...')
             images, labels = images.to(device), labels.to(device)
+
             optimizer.zero_grad()
+
             outputs = model(images)
+            _, targets_pred = torch.max(outputs, 1)
+            train_corrects += torch.sum(labels == targets_pred).item()
+
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
-            running_loss += loss.item()
+            running_loss += loss.item() * bs
+            probs = torch.softmax(outputs, dim=1)[:, 1] 
+            all_preds.extend(targets_pred.cpu().numpy())
+            all_labels.extend(labels.cpu().detach().numpy())
+            all_probs.extend(probs.cpu().detach().numpy())
         
-        # Validation
+        train_losses_epochs.append(running_loss/num_samples)
+        train_accuracy_epochs.append(1.0*train_corrects/float(num_samples))
+
+        train_accuracy = accuracy_score(all_labels, all_preds)
+        train_f1 = f1_score(all_labels, all_preds, zero_division=0)
+        train_recall = recall_score(all_labels, all_preds, zero_division=0)
+        train_precision = precision_score(all_labels, all_preds, zero_division=0)
+        train_roc_auc = roc_auc_score(all_labels, all_probs)
+
+        
+        #---------- VALIDATION ----------
+        #we use DEFAULT THRESHOLD 0.5 to classify images
+
         model.eval()
-        val_loss, accuracy, f1, roc_auc, cm = evaluate(model, val_loader, criterion, device)
-        print(f'Epoch {epoch+1}/{config["training"]["epochs"]}, Train Loss: {running_loss/len(train_loader):.4f}, Val Loss: {val_loss:.4f}, Accuracy: {accuracy:.4f}, F1: {f1:.4f}, ROC-AUC: {roc_auc:.4f}')
+        val_loss, accuracy, f1, recall, precision, roc_auc, _, num_samples, val_corrects = evaluate(model, val_loader, criterion, device, optimal_threshold=False)
+        val_acc = 1.0*val_corrects/float(num_samples)
+        validation_accuracy_epochs.append(val_acc)
+        validation_losses_epochs.append(val_loss)
+
+        print(f'Epoch {epoch+1}/{config['training']['params']["epochs"]}, Train Loss: {running_loss/num_samples:.4f}, Accuracy: {train_accuracy:.4f}, Recall: {train_recall:.4f}, Precision: {train_precision:.4f}, F1: {train_f1:.4f}, ROC-AUC: {train_roc_auc:.4f}')
+        print(f'Epoch {epoch+1}/{config['training']['params']["epochs"]}, Val Loss: {val_loss}, Accuracy: {accuracy:.4f}, Recall: {recall:.4f}, Precision: {precision:.4f}, F1: {f1:.4f}, ROC-AUC: {roc_auc:.4f}')
         
-        if accuracy > best_val_accuracy:
-            best_val_accuracy = accuracy
+        if recall > best_recall:
+            early_stopping_count = 0
+            best_recall = recall
+            best_model_accuracy = accuracy
             output_dir = config.get('output_dir', 'results/baseline')
             os.makedirs(output_dir, exist_ok=True)
             model_save_path = os.path.join(output_dir, 'classifier.pth')
             torch.save(model.state_dict(), model_save_path)
+        else:
+            early_stopping_count+=1
+            
+        if early_stopping_count>=patience:
+            print(f'Early stopping at epoch {epoch}')
+            break
     
-    print(f'Training completed. Best val accuracy: {best_val_accuracy:.4f}')
+    
+    print(f'Training completed. Best recall: {best_recall:.4f}')
+    print(f'Model validation accuracy: {best_model_accuracy:.4f}')
     
     output_dir = config.get('output_dir', 'results/baseline')
     model_save_path = os.path.join(output_dir, 'classifier.pth')
+
+    #---------- PLOTS ----------
+    plot_dir = os.path.join(output_dir, 'plots')
+    os.makedirs(plot_dir, exist_ok=True)
+    
+    
+    plot_train_val_stats(plot_dir, train_losses_epochs, validation_losses_epochs, train_accuracy_epochs, validation_accuracy_epochs)
+
+    #PLOTTING ROC-CURVE and RECALL-PRECISION on VALIDATION SET to compute OPTIMAL THRESHOLD (max F1)
+    val_loss_final, val_accuracy, val_f1, val_recall, val_precision, val_roc_auc, val_cm, optimal_threshold = evaluate_with_threshold_tuning(model, val_loader, criterion, device, plot_dir)
+    print(f'\nValidation with Optimal Threshold: Loss: {val_loss_final:.4f}, Accuracy: {val_accuracy:.4f}, Recall: {val_recall:.4f}, Precision: {val_precision:.4f}, F1: {val_f1:.4f}, ROC-AUC: {val_roc_auc:.4f}')
+    print(f'Validation Confusion Matrix:\n{val_cm}\n')
+
+    #---------- TESTING USING OPTIMAL THRESHOLD ----------
     model.load_state_dict(torch.load(model_save_path))
-    test_loss, test_accuracy, test_f1, test_roc_auc, test_cm = test_model(model, config, device)
-    print(f'Final Test Loss: {test_loss:.4f}, Test Accuracy: {test_accuracy:.4f}, F1: {test_f1:.4f}, ROC-AUC: {test_roc_auc:.4f}')
+    test_loss, test_accuracy, test_f1, test_recall, test_precision, test_roc_auc, test_cm = test_model(model, config, device, optimal_threshold)
+
+    #PLOT CONFUSION MATRIX
+    plot_cm(plot_dir, test_cm)
+    print(f'Final Test Loss: {test_loss:.4f}, Test Accuracy: {test_accuracy:.4f}, Recall: {test_recall:.4f}, Precision: {test_precision:.4f}, F1: {test_f1:.4f}, ROC-AUC: {test_roc_auc:.4f}')
+    print(f'Optimal Threshold: {optimal_threshold:.3f}')
     print(f'Confusion Matrix:\n{test_cm}')
     
     return {
         'accuracy': test_accuracy,
+        'recall': test_recall,
+        'precision': test_precision,
         'f1': test_f1,
         'roc_auc': test_roc_auc,
         'val_loss': test_loss,
-        'best_val_accuracy': best_val_accuracy
+        'best_val_accuracy': best_model_accuracy,
+        'optimal_threshold': optimal_threshold
     }
 
 if __name__ == '__main__':

@@ -8,24 +8,23 @@ from train_classifier import main as train_main
 
 def run_baseline():
 
-    print("BASELINE TRAINING - no_freeze (all ResNet50 layers trainable)")
+    print("BASELINE TRAINING - all layer freezed except for FCL head")
     
-    with open('experiments/baseline.yaml', 'r') as f:
-        config = yaml.safe_load(f)
+    try:
+        with open('experiments/baseline_freeze.yaml', 'r') as f:
+            config = yaml.safe_load(f)
+        
+        
+        metrics = train_main(config)
+        
+        print("BASELINE COMPLETED")
+        
+        return metrics
     
-    config['freezing_strategy'] = 'no_freeze'
-    config['output_dir'] = 'results/baseline'
-    
-    metrics = train_main(config)
-    
-    print("BASELINE COMPLETED")
-    print(f"Accuracy: {metrics['accuracy']:.4f}")
-    print(f"F1-Score: {metrics['f1']:.4f}")
-    print(f"ROC-AUC: {metrics['roc_auc']:.4f}")
-    print(f"Val Loss: {metrics['val_loss']:.4f}")
-    print(f"Model saved: results/baseline/classifier.pth\n")
-    
-    return metrics
+    except Exception as e:
+        print(f'Error with file name experiments/baseline_freeze.yaml: {e}')
+        return None
 
 if __name__ == '__main__':
-    run_baseline()
+    result = run_baseline()
+    print(result)
