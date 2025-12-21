@@ -59,11 +59,11 @@ def generate_final_report(baseline_metrics, finetune_results, tuning_results, be
         import pandas as pd
         # Prepare metrics for each step
         steps = ['Baseline', 'Fine-tuned', 'Hyperparam Tuned']
-        metrics = ['accuracy', 'f1', 'roc_auc', 'val_loss']
+        metrics = ['accuracy', 'precision', 'recall', 'f1', 'roc_auc', 'val_loss']
         values = [
-            [baseline_metrics['accuracy'], baseline_metrics['f1'], baseline_metrics['roc_auc'], baseline_metrics['val_loss']],
-            [finetune_results['accuracy'], finetune_results['f1'], finetune_results['roc_auc'], finetune_results['val_loss']],
-            [tuning_results['accuracy'], tuning_results['f1'], tuning_results['roc_auc'], tuning_results['val_loss']] if (tuning_results and best_config) is not False else None
+            [baseline_metrics['accuracy'], baseline_metrics['precision'], baseline_metrics['recall'], baseline_metrics['f1'], baseline_metrics['roc_auc'], baseline_metrics['val_loss']],
+            [finetune_results['accuracy'], finetune_results['precision'], finetune_results['recall'], finetune_results['f1'], finetune_results['roc_auc'], finetune_results['val_loss']],
+            [tuning_results['accuracy'], tuning_results['precision'], tuning_results['recall'], tuning_results['f1'], tuning_results['roc_auc'], tuning_results['val_loss']] if (tuning_results and best_config) is not False else None
         ]
 
         df = pd.DataFrame([x for x in values if x is not None], columns=metrics, index=[s for s, v in zip(steps, values) if v is not None])
@@ -116,16 +116,30 @@ def generate_final_report(baseline_metrics, finetune_results, tuning_results, be
         # Improvement summary
         ax4 = fig.add_subplot(gs[2, 1])
         ax4.axis('off')
-        improvement_finetune = (finetune_results['f1'] - baseline_metrics['f1']) / baseline_metrics['f1'] * 100
-        improvement_final = (tuning_results['f1'] - baseline_metrics['f1']) / baseline_metrics['f1'] * 100 if tuning_results else None
-        summary_text = (
+        improvement_finetune_f1 = (finetune_results['f1'] - baseline_metrics['f1']) / baseline_metrics['f1'] * 100
+        improvement_final_f1 = (tuning_results['f1'] - baseline_metrics['f1']) / baseline_metrics['f1'] * 100 if tuning_results else None
+
+        improvement_finetune_recall = (finetune_results['recall'] - baseline_metrics['recall']) / baseline_metrics['recall'] * 100
+        improvement_final_recall = (tuning_results['recall'] - baseline_metrics['recall']) / baseline_metrics['recall'] * 100 if tuning_results else None
+
+        summary_text_f1 = (
             f"F1 Score Improvement:\n"
             f"- Baseline: {baseline_metrics['f1']:.4f}\n"
-            f"- Fine-tuned: {finetune_results['f1']:.4f} ({improvement_finetune:+.2f}%)\n"
-            f"- Hyperparam Tuned: {tuning_results['f1']:.4f} ({improvement_final:+.2f}%)\n\n" if tuning_results else 'No Hyperparameter Tuning performed'
-            f"Model location:\n{model_loc}"
+            f"- Fine-tuned: {finetune_results['f1']:.4f} ({improvement_finetune_f1:+.2f}%)\n"
+            f"- Hyperparam Tuned: {tuning_results['f1']:.4f} ({improvement_final_f1:+.2f}%)\n\n" if tuning_results else 'No Hyperparameter Tuning performed'
         )
-        ax4.text(0, 1, summary_text, fontsize=12, va='top', ha='left', wrap=True)
+        ax4.text(0, 1, summary_text_f1, fontsize=12, va='top', ha='left', wrap=True)
+
+        # Add recall improvement summary in ax5, same style as ax4
+        ax5 = fig.add_subplot(gs[3, :]) if hasattr(gs, '__getitem__') and gs.get_geometry()[0] > 3 else fig.add_subplot(111)
+        ax5.axis('off')
+        summary_text_recall = (
+            f"Recall Improvement:\n"
+            f"- Baseline: {baseline_metrics['recall']:.4f}\n"
+            f"- Fine-tuned: {finetune_results['recall']:.4f} ({improvement_finetune_recall:+.2f}%)\n"
+            f"- Hyperparam Tuned: {tuning_results['recall']:.4f} ({improvement_final_recall:+.2f}%)\n\n" if tuning_results else 'No Hyperparameter Tuning performed'
+        )
+        ax5.text(0, 1, summary_text_recall, fontsize=12, va='top', ha='left', wrap=True)
 
         # Save image
         image_path = os.path.join(report_dir, "optimization_report.png")
@@ -140,41 +154,52 @@ def generate_final_report(baseline_metrics, finetune_results, tuning_results, be
     report_path = os.path.join(report_dir, "optimization_report.txt")
     
 
+
     # Write text report
     with open(report_path, 'w') as f:
         f.write("FINAL OPTIMIZATION REPORT\n")
         f.write("STEP 0: BASELINE TRAINING (freeze)\n")
         f.write(f"  - Accuracy: {baseline_metrics['accuracy']:.4f}\n")
+        f.write(f"  - Precision: {baseline_metrics['precision']:.4f}\n")
+        f.write(f"  - Recall: {baseline_metrics['recall']:.4f}\n")
         f.write(f"  - F1-Score: {baseline_metrics['f1']:.4f}\n")
         f.write(f"  - ROC-AUC: {baseline_metrics['roc_auc']:.4f}\n")
         f.write(f"  - Val Loss: {baseline_metrics['val_loss']:.4f}\n\n")
         f.write("STEP 1: FINE-TUNING\n")
         f.write(FINAL_METRICS)
         f.write(f"  - Accuracy: {finetune_results['accuracy']:.4f}\n")
+        f.write(f"  - Precision: {finetune_results['precision']:.4f}\n")
+        f.write(f"  - Recall: {finetune_results['recall']:.4f}\n")
         f.write(f"  - F1-Score: {finetune_results['f1']:.4f}\n")
         f.write(f"  - ROC-AUC: {finetune_results['roc_auc']:.4f}\n")
         f.write(f"  - Val Loss: {finetune_results['val_loss']:.4f}\n\n")
-        f.write("STEP 2: HYPERPARAMETER TUNING\n")
+
         if best_config:
+            f.write("STEP 2: HYPERPARAMETER TUNING\n")
             f.write(f"Best hyperparameter configuration:\n{best_config}\n")
             f.write(FINAL_METRICS)
             f.write(f"  - Accuracy: {tuning_results['accuracy']:.4f}\n")
+            f.write(f"  - Precision: {tuning_results['precision']:.4f}\n")
+            f.write(f"  - Recall: {tuning_results['recall']:.4f}\n")
             f.write(f"  - F1-Score: {tuning_results['f1']:.4f}\n")
             f.write(f"  - ROC-AUC: {tuning_results['roc_auc']:.4f}\n")
             f.write(f"  - Validation Loss: {tuning_results['val_loss']:.4f}\n\n")
             f.write("COMPARISON: Baseline vs Fine-tuned vs Fine Tuned and Hyperparameter Tuned\n")
-            improvement_final = (tuning_results['f1'] - baseline_metrics['f1']) / baseline_metrics['f1'] * 100
+            improvement_final_f1 = (tuning_results['f1'] - baseline_metrics['f1']) / baseline_metrics['f1'] * 100
+            improvement_final_recall = (tuning_results['recall'] - baseline_metrics['recall']) / baseline_metrics['recall'] * 100
 
-        improvement_finetune = (finetune_results['f1'] - baseline_metrics['f1']) / baseline_metrics['f1'] * 100
-        f.write(f"  Baseline F1: {baseline_metrics['f1']:.4f}\n")
-        f.write(f" Fine Tune F1: {finetune_results['f1']:.4f} ({improvement_finetune:+.2f}%)\n")
-        
+        improvement_finetune_f1 = (finetune_results['f1'] - baseline_metrics['f1']) / baseline_metrics['f1'] * 100
+        improvement_finetune_recall = (finetune_results['recall'] - baseline_metrics['recall']) / baseline_metrics['recall'] * 100
+        f.write(f"Baseline F1: {baseline_metrics['f1']:.4f}\n")
+        f.write(f"Fine Tune F1: {finetune_results['f1']:.4f} ({improvement_finetune_f1:+.2f}%)\n")
         if best_config:
-            f.write(f"  After Hyperparameter Tuning F1: {tuning_results['f1']:.4f} ({improvement_final:+.2f}%)\n\n")
-            model_loc = "results/hyperparameter_tuning/{}/classifier.pth".format(
-                f"lr_{best_config['learning_rate']}_bs_{best_config['batch_size']}_wd_{best_config['weight_decay']}_{best_config['optimizer']}_cwr".replace('.', '_')
-            )
-            f.write(f"Model location: {model_loc}\n")
+            f.write(f"  After Hyperparameter Tuning F1: {tuning_results['f1']:.4f} ({improvement_final_f1:+.2f}%)\n")
+        f.write(f"Baseline Recall: {baseline_metrics['recall']:.4f}\n")
+        f.write(f"Fine Tune Recall: {finetune_results['recall']:.4f} ({improvement_finetune_recall:+.2f}%)\n")
+        if best_config:
+            f.write(f"  After Hyperparameter Tuning Recall: {tuning_results['recall']:.4f} ({improvement_final_recall:+.2f}%)\n")
+
+        if best_config:
             f.write("Best hyperparameter configuration:\n")
             f.write(f"  - Learning Rate: {best_config['learning_rate']}\n")
             f.write(f"  - Batch Size: {best_config['batch_size']}\n")
@@ -183,6 +208,8 @@ def generate_final_report(baseline_metrics, finetune_results, tuning_results, be
             f.write(f"  - Optimizer: {best_config['optimizer']}\n")
             f.write(FINAL_METRICS)
             f.write(f"  - Accuracy: {tuning_results['accuracy']:.4f}\n")
+            f.write(f"  - Precision: {tuning_results['precision']:.4f}\n")
+            f.write(f"  - Recall: {tuning_results['recall']:.4f}\n")
             f.write(f"  - F1-Score: {tuning_results['f1']:.4f}\n")
             f.write(f"  - ROC-AUC: {tuning_results['roc_auc']:.4f}\n")
             f.write(f"  - Validation Loss: {tuning_results['val_loss']:.4f}\n\n")
@@ -208,7 +235,6 @@ def generate_final_report(baseline_metrics, finetune_results, tuning_results, be
                 'roc_auc': float(best_config['roc_auc']),
                 'val_loss': float(best_config['val_loss'])
             },
-            'model_path': model_loc
         }
         with open(summary_path, 'w') as f:
             json.dump(summary, f, indent=2)

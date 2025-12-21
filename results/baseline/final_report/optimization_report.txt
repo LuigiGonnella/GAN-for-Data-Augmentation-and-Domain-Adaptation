@@ -1,0 +1,17 @@
+FINAL OPTIMIZATION REPORT
+STEP 0: BASELINE TRAINING (freeze)
+  - Accuracy: 0.8727
+  - F1-Score: 0.3824
+  - ROC-AUC: 0.8195
+  - Val Loss: 0.2529
+
+STEP 1: FINE-TUNING
+Final Metrics:
+  - Accuracy: 0.8339
+  - F1-Score: 0.4268
+  - ROC-AUC: 0.8720
+  - Val Loss: 0.3556
+
+STEP 2: HYPERPARAMETER TUNING
+  Baseline F1: 0.3824
+ Fine Tune F1: 0.4268 (+11.62%)
