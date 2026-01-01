@@ -175,7 +175,7 @@ def main(config=None):
     validation_accuracy_epochs = []
     
     for epoch in range(config['training']['params']['epochs']):
-        print(f'\nStarting epoch {epoch+1}/{config['training']['params']["epochs"]}...')
+        print(f"\nStarting epoch {epoch+1}/{config['training']['params']['epochs']}...")
         train_corrects = 0
         num_samples = 0  # Initialize for this epoch
         
@@ -230,8 +230,8 @@ def main(config=None):
         validation_accuracy_epochs.append(val_acc)
         validation_losses_epochs.append(val_loss)
 
-        print(f'Epoch {epoch+1}/{config['training']['params']["epochs"]}, Train Loss: {train_loss:.4f}, Accuracy: {train_accuracy:.4f}, Recall: {train_recall:.4f}, Precision: {train_precision:.4f}, F1: {train_f1:.4f}, ROC-AUC: {train_roc_auc:.4f}')
-        print(f'Epoch {epoch+1}/{config['training']['params']["epochs"]}, Val Loss: {val_loss:.4f}, Accuracy: {accuracy:.4f}, Recall: {recall:.4f}, Precision: {precision:.4f}, F1: {f1:.4f}, ROC-AUC: {roc_auc:.4f}')
+        print(f"Epoch {epoch+1}/{config['training']['params']['epochs']}, Train Loss: {train_loss:.4f}, Accuracy: {train_accuracy:.4f}, Recall: {train_recall:.4f}, Precision: {train_precision:.4f}, F1: {train_f1:.4f}, ROC-AUC: {train_roc_auc:.4f}")
+        print(f"Epoch {epoch+1}/{config['training']['params']['epochs']}, Val Loss: {val_loss:.4f}, Accuracy: {accuracy:.4f}, Recall: {recall:.4f}, Precision: {precision:.4f}, F1: {f1:.4f}, ROC-AUC: {roc_auc:.4f}")
         
         if recall > best_recall:
             early_stopping_count = 0

@@ -1,0 +1,36 @@
+model:
+  type: "dcgan"
+  generator:
+    latent_dim: 100
+    n1: 512
+    channels: 3
+    width: 128
+    height: 128
+  discriminator:
+    channels: 3
+    width: 128
+    height: 128
+    dropout: 0.3
+
+training:
+  batch_size: 64
+  epochs: 300
+  g_lr: 0.0002
+  d_lr: 0.0001
+  n_critic: 1
+
+loss:
+  type: "mse"
+
+data:
+  train_dir: "data/processed/baseline/train/malignant"
+  image_size: 128
+
+output:
+  sample_dir: "results/gan/dcgan_mse/samples"
+  metrics_dir: "results/gan/dcgan_mse/metrics"
+  save_interval: 50
+
+evaluation:
+  fid_is_interval: 50
+  fid_is_num_samples: 256
