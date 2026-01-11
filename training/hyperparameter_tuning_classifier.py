@@ -1,6 +1,7 @@
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
+import argparse
 
 import yaml
 import pandas as pd
@@ -20,12 +21,24 @@ N_ITERATIONS = 10 #simulate 10 iterations of RandomSearch
 BEST_CONFIG_EPOCHS = 10
 
 def tune_with_hyperparams(hyperparams):
-        
+    
+    print("BASELINE DATASET TRAINING - HYPERPARAMETER TUNING & FINETUNING'")
     print(f"TESTING PARAMS: {hyperparams}")
 
-    try:
+    parser = argparse.ArgumentParser(
+        description='BASELINE DATASET TRAINING - HYPERPARAMETER TUNING & FINETUNING'
+    )
+
+    parser.add_argument(
+        '--config', 
+        type=str, 
+        required=True,
+        help='Path to config YAML file')
     
-        with open('experiments/baseline_ft_ht.yaml', 'r') as f:
+    args = parser.parse_args()
+    
+    try:
+        with open(args.config, 'r') as f:
             config = yaml.safe_load(f)
         
         config['training']['params'] = {**config['training']['params'], **hyperparams}    
@@ -128,7 +141,7 @@ def run_best_config():
     print("FINETUNING WITH HYPERPARAMETER TUNING TRAINING - BEST CONFIGURATION TRAINING")
 
     try:
-        with open('experiments/baseline_ft_ht.yaml', 'r') as f:
+        with open('experiments/classifier_baseline_ft_ht.yaml', 'r') as f:
             config = yaml.safe_load(f)
 
         config['training']['params']['epochs'] = BEST_CONFIG_EPOCHS
@@ -140,7 +153,7 @@ def run_best_config():
         print("FINETUNING WITH HYPERPARAMETER TUNING TRAINING COMPLETED")
         return metrics
     except Exception as e:
-        print(f'Error with file name experiments/baseline_ft_ht.yaml: {e}')
+        print(f'Error with file name experiments/classifier_baseline_ft_ht.yaml: {e}')
         return None
 
 

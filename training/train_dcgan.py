@@ -11,7 +11,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from models.gan.DCGAN import DCGANGenerator, DCGANDiscriminator
+from models.gan.DCGAN import DCGANGenerator, PatchGANDiscriminatorSN
 from models.gan.gan_losses import get_loss_fn
 from evaluation.gan_metrics import GANMetrics
 
@@ -51,7 +51,8 @@ class GANTrainer:
     def _create_output_dirs(self):
         dirs = [
             self.config['output']['sample_dir'],
-            self.config['output']['metrics_dir']
+            self.config['output']['metrics_dir'],
+            self.config['output'].get('checkpoint_dir', 'results/checkpoints')
         ]
         for dir_path in dirs:
             Path(dir_path).mkdir(parents=True, exist_ok=True)
@@ -62,17 +63,15 @@ class GANTrainer:
             input_dim=gen_config['latent_dim'],
             n1=gen_config['n1'],
             channels=gen_config['channels'],
-            width=gen_config['width'],
-            height=gen_config['height']
         ).to(self.device)
         return generator
     
     def _build_discriminator(self):
         disc_config = self.config['model']['discriminator']
-        discriminator = DCGANDiscriminator(
+        discriminator = PatchGANDiscriminatorSN(
             channels=disc_config['channels'],
-            width=disc_config['width'],
-            height=disc_config['height'],
+            ndf=disc_config['ndf'],
+            n_layers=disc_config['n_layers'],
             dropout=disc_config['dropout']
         ).to(self.device)
         return discriminator
@@ -211,12 +210,18 @@ class GANTrainer:
                 try:
                     real_images = real_images.to(self.device, non_blocking=True)
                     batch_size = real_images.size(0)
+
+                    # ---------------------
+                    # Train Discriminator
+                    # ---------------------
                     
                     for _ in range(n_critic):
                         self.d_optimizer.zero_grad()
                         
+                        # Real images - PatchGAN outputs [B, 1, N, N]
                         d_real_output = self.discriminator(real_images)
                         
+                        # Fake images
                         z = torch.randn(batch_size, latent_dim, device=self.device)
                         fake_images = self.generator(z)
                         d_fake_output = self.discriminator(fake_images.detach())
@@ -231,11 +236,17 @@ class GANTrainer:
                             d_loss = self.loss_fn.discriminator_loss(d_real_output, d_fake_output)
                         
                         d_loss.backward()
+
+                        # Gradient clipping
                         torch.nn.utils.clip_grad_norm_(self.discriminator.parameters(), 1.0)
                         self.d_optimizer.step()
                     
+                    # ---------------------
+                    # Train Generator
+                    # ---------------------
                     self.g_optimizer.zero_grad()
                     
+                    # Generate new fake images
                     z = torch.randn(batch_size, latent_dim, device=self.device)
                     fake_images = self.generator(z)
                     d_fake_output = self.discriminator(fake_images)
@@ -277,6 +288,7 @@ class GANTrainer:
             
             if (epoch + 1) % save_interval == 0:
                 self._save_samples(epoch, latent_dim)
+                self._save_checkpoint(epoch)
             
             if (epoch + 1) % self.fid_is_interval == 0:
                 self._compute_fid_is(latent_dim)
@@ -292,6 +304,7 @@ class GANTrainer:
         
         print("\nTraining complete!")
         self._save_samples(epochs - 1, latent_dim, final=True)
+        self._save_checkpoint(epochs - 1, final=True)
         self.metrics.save_metrics()
         self.metrics.plot_losses()
         
@@ -326,12 +339,38 @@ class GANTrainer:
         print(f"Saved samples: {filename}")
         
         self.generator.train()
+    
+    def _save_checkpoint(self, epoch, final=False):
+        """Save model checkpoints"""
+        checkpoint_dir = Path(self.config['output'].get('checkpoint_dir', 'results/checkpoints'))
+        checkpoint_dir.mkdir(parents=True, exist_ok=True)
+        
+        checkpoint = {
+            'epoch': epoch,
+            'generator': self.generator.state_dict(),
+            'discriminator': self.discriminator.state_dict(),
+            'g_optimizer': self.g_optimizer.state_dict(),
+            'd_optimizer': self.d_optimizer.state_dict(),
+            'config': self.config
+        }
+        
+        if final:
+            filename = 'final_checkpoint.pth'
+            # Also save generator separately for easy loading
+            generator_filename = 'final_generator.pth'
+            torch.save(self.generator.state_dict(), checkpoint_dir / generator_filename)
+            print(f"Saved final generator: {generator_filename}")
+        else:
+            filename = f'checkpoint_epoch_{epoch+1}.pth'
+        
+        torch.save(checkpoint, checkpoint_dir / filename)
+        print(f"Saved checkpoint: {filename}")
 
 
 def main():
     parser = argparse.ArgumentParser(description='Train DCGAN on malignant images')
     parser.add_argument('--config', type=str, required=True,
-                       help='Path to config YAML file')
+                       help='Path to config YAML file') #we specify the type of loss to use passing the correspondent experiment as an argument
     
     args = parser.parse_args()
     

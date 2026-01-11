@@ -1,0 +1,46 @@
+#HYPERPARAMETER TUNING on cDCGAN with the best loss according to previous experiments
+model:
+  type: "cdcgan_ht"
+  generator:
+    latent_dim: 
+    n1: 
+    channels: 
+    width: 
+    height: 
+  discriminator: #PatchGAN
+    num_classes: 2
+    channels: 3
+    width: 
+    height: 
+    n_layers:    # For 128×128 images → 14×14 output
+    dropout: 
+    
+#PATCHGAN LAYERS DETERMINE PATCHES according to the following scheme:
+#n_layers	Output_Size	Receptive_Field	Patch_Coverage
+#   3	        14×14	    70×70 pixels	 ~50% overlap
+#   4	         6×6	    142×142 pixels	Large patches
+#   5	         2×2	    ~Full image	    Similar to DCGAN
+
+training:
+  batch_size: 
+  epochs: 
+  g_lr: 
+  d_lr: 
+  n_critic: 
+
+loss:
+  type: 
+  lambda_gp: #only for wasserstein
+
+data:
+  train_dir: "data/processed/baseline/train/malignant"
+  image_size: 
+
+output:
+  sample_dir: "data/synthetic/" #model to be decided
+  metrics_dir: "results/gan_metrics/" #model to be decided
+  save_interval: 50
+
+evaluation:
+  fid_is_interval: 50
+  fid_is_num_samples: 256

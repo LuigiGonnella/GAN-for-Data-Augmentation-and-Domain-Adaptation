@@ -5,7 +5,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from train_classifier import main as train_main
 from finetune_classifier import run_fine_tuning
 from hyperparameter_tuning import run_hyperparameter_tuning
-from baseline_training import run_baseline
+from training.baseline_training_classifier import run_baseline
 import yaml
 import json
 from datetime import datetime

@@ -1,7 +1,7 @@
 experiment_name: baseline_ft_ht
 
-dataset:
-  type: baseline
+data_path: "data/processed/baseline"
+
 
 model:
   name: resnet50

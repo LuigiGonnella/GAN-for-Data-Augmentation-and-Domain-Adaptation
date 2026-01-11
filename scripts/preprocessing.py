@@ -55,7 +55,7 @@ def copy_images(images, src_folder, dst_folder):
     return len(images)
 
 
-def populate_baseline(seed, df, val_ratio, test_ratio):
+def populate_baseline_and_augmented(seed, df, val_ratio, test_ratio):
 
     #get test - (train + val) split
     X, x_test, Y, y_test = train_test_split(df['img_name'], df['target'], test_size=test_ratio, random_state=seed, stratify=df['target']) #mantain same imbalance
@@ -77,29 +77,43 @@ def populate_baseline(seed, df, val_ratio, test_ratio):
     val_images = list(df_val['img_name'])
 
     #obtain dir paths and copy images
-    train_benign_path = os.path.join(config.BASELINE_PATH, 'train', 'benign')
-    len_benign_train = copy_images(train_benign_images, config.RAW_DATA_PATH, train_benign_path)
+    baseline_train_benign_path = os.path.join(config.BASELINE_PATH, 'train', 'benign')
+    baseline_len_benign_train = copy_images(train_benign_images, config.RAW_DATA_PATH, baseline_train_benign_path)
 
-    print(f'COPIED {len_benign_train} BENIGN IMAGES IN train/benign FOLDER')
+    augmented_train_benign_path = os.path.join(config.AUGMENTED_PATH, 'train', 'benign')
+    augmented_len_benign_train = copy_images(train_benign_images, config.RAW_DATA_PATH, augmented_train_benign_path)
+
+    print(f'COPIED {baseline_len_benign_train} BENIGN IMAGES IN baseline/train/benign FOLDER')
+    print(f'COPIED {augmented_len_benign_train} BENIGN IMAGES IN augmented/train/benign FOLDER')
 
     train_malignant_path = os.path.join(config.BASELINE_PATH, 'train', 'malignant')
     len_malignant_train = copy_images(train_malignant_images, config.RAW_DATA_PATH, train_malignant_path)
     
     print(f'COPIED {len_malignant_train} MALIGNANT IMAGES IN train/malignant FOLDER')
 
-    test_path = os.path.join(config.BASELINE_PATH, 'test')
-    len_test = copy_images(test_images, config.RAW_DATA_PATH, test_path)
+    baseline_test_path = os.path.join(config.BASELINE_PATH, 'test')
+    baseline_len_test = copy_images(test_images, config.RAW_DATA_PATH, baseline_test_path)
 
-    print(f'COPIED {len_test} TEST IMAGES IN test FOLDER')
+    augmented_test_path = os.path.join(config.AUGMENTED_PATH, 'test')
+    augmented_len_test = copy_images(test_images, config.RAW_DATA_PATH, augmented_test_path)
+
+    print(f'COPIED {baseline_len_test} TEST IMAGES IN baseline/test FOLDER')
+    print(f'COPIED {augmented_len_test} TEST IMAGES IN augmented/test FOLDER')
 
     
+    baseline_val_path = os.path.join(config.BASELINE_PATH, 'val')
+    baseline_len_val = copy_images(val_images, config.RAW_DATA_PATH, baseline_val_path)
 
-    val_path = os.path.join(config.BASELINE_PATH, 'val')
-    len_val = copy_images(val_images, config.RAW_DATA_PATH, val_path)
+    augmented_val_path = os.path.join(config.AUGMENTED_PATH, 'val')
+    augmented_len_val = copy_images(val_images, config.RAW_DATA_PATH, augmented_val_path)
 
-    print(f'COPIED {len_val} VAL IMAGES IN val FOLDER')
+    print(f'COPIED {baseline_len_val} VAL IMAGES IN baseline/val FOLDER')
+    print(f'COPIED {augmented_len_val} VAL IMAGES IN augmented/val FOLDER')
 
     return df_test, df_train, df_val
+
+
+
 
     
 
@@ -109,7 +123,7 @@ def populate_baseline(seed, df, val_ratio, test_ratio):
 df = load_and_preprocess_data(cfg['dataset']['malignant_count'], cfg['dataset']['benign_count'])
 
 #populate baseline/train, baseline/test and baseline/val
-df_test, df_train, df_val = populate_baseline(cfg['dataset']['random_seed'], df, cfg['dataset']['val_ratio'], cfg['dataset']['test_ratio'])
+df_test, df_train, df_val = populate_baseline_and_augmented(cfg['dataset']['random_seed'], df, cfg['dataset']['val_ratio'], cfg['dataset']['test_ratio'])
 
 #save metadata for classifier training
 df_test.to_csv(config.BASELINE_PATH / 'test' / 'test.csv', index=False)

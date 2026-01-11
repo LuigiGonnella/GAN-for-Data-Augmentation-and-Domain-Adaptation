@@ -6,11 +6,19 @@ model:
     channels: 3
     width: 128
     height: 128
-  discriminator:
+  discriminator: #PatchGAN
     channels: 3
+    ndf: 64
     width: 128
     height: 128
+    n_layers: 3    # For 128×128 images → 14×14 output
     dropout: 0.3
+    
+#PATCHGAN LAYERS DETERMINE PATCHES according to the following scheme:
+#n_layers	Output_Size	Receptive_Field	Patch_Coverage
+#   3	        14×14	    70×70 pixels	 ~50% overlap
+#   4	         6×6	    142×142 pixels	Large patches
+#   5	         2×2	    ~Full image	    Similar to DCGAN
 
 training:
   batch_size: 32
@@ -18,6 +26,13 @@ training:
   g_lr: 0.0002
   d_lr: 0.0001
   n_critic: 1
+
+generation:
+  batch_size: 64
+  num_samples: 3000
+  checkpoint: "results/checkpoints/dcgan_bce/final_generator.pth"
+  sample_dir: "data/synthetic/dcgan_bce/generation"
+  preview_dir: "data/synthetic/dcgan_bce"
 
 loss:
   type: "bce"
@@ -27,8 +42,9 @@ data:
   image_size: 128
 
 output:
-  sample_dir: "results/gan/dcgan_bce/samples"
-  metrics_dir: "results/gan/dcgan_bce/metrics"
+  sample_dir: "data/synthetic/dcgan_bce"
+  metrics_dir: "results/gan_metrics/dcgan_bce"
+  checkpoint_dir: "results/checkpoints/dcgan_bce"
   save_interval: 50
 
 evaluation:

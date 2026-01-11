@@ -103,6 +103,57 @@ class MCELoss:
         """
         return self.loss_fn(fake_output, torch.ones_like(fake_output))
 
+class HingeLoss:
+    """
+    Hinge Loss for GANs
+    
+    Used in SN-GAN (Miyato et al., 2018) and SA-GAN (Zhang et al., 2019).
+    Provides stable training with strong gradients and better mode coverage.
+    
+    References:
+        - Miyato et al. "Spectral Normalization for GANs" (ICLR 2018)
+        - Zhang et al. "Self-Attention GANs" (ICML 2019)
+    """
+    
+    def __init__(self):
+        pass
+    
+    def discriminator_loss(self, real_output, fake_output):
+        """
+        Hinge loss for discriminator:
+        L_D = E[max(0, 1 - D(x_real))] + E[max(0, 1 + D(x_fake))]
+        
+        The discriminator tries to:
+        - Push real samples above +1
+        - Push fake samples below -1
+        
+        Args:
+            real_output: Discriminator output for real images [B, 1, N, N] 
+            fake_output: Discriminator output for fake images [B, 1, N, N] 
+        
+        Returns:
+            Scalar loss value
+        """
+        # For PatchGAN, average over all spatial positions
+        real_loss = torch.mean(torch.relu(1.0 - real_output))
+        fake_loss = torch.mean(torch.relu(1.0 + fake_output))
+        return real_loss + fake_loss
+    
+    def generator_loss(self, fake_output):
+        """
+        Hinge loss for generator:
+        L_G = -E[D(G(z))]
+        
+        Generator tries to maximize discriminator output for fake images.
+        
+        Args:
+            fake_output: Discriminator output for fake images [B, 1, N, N] or [B, 1]
+        
+        Returns:
+            Scalar loss value
+        """
+        return -torch.mean(fake_output)
+
 
 def get_loss_fn(loss_type, **kwargs):
     """
@@ -125,8 +176,12 @@ def get_loss_fn(loss_type, **kwargs):
         return WassersteinLoss(lambda_gp=lambda_gp)
     elif loss_type == 'mse':
         return MCELoss()
+    elif loss_type == 'hinge':
+        return HingeLoss()
     else:
         raise ValueError(
             f"Unknown loss type: {loss_type}. "
-            f"Choose from: 'bce', 'wasserstein', 'mse'"
+            f"Choose from: 'bce', 'wasserstein', 'mse', 'hinge'"
         )
+
+

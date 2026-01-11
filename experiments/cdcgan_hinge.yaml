@@ -1,14 +1,16 @@
 model:
-  type: "dcgan"
+  type: "cdcgan" 
+  conditional: true
   generator:
     latent_dim: 100
+    num_classes: 2  # benign=0, malignant=1
     n1: 512
     channels: 3
     width: 128
     height: 128
   discriminator: #PatchGAN
+    num_classes: 2
     channels: 3
-    ndf: 64
     width: 128
     height: 128
     n_layers: 3    # For 128×128 images → 14×14 output
@@ -25,27 +27,19 @@ training:
   epochs: 300
   g_lr: 0.0002
   d_lr: 0.0001
-  n_critic: 5
-
-generation:
-  batch_size: 64
-  num_samples: 3000
-  checkpoint: "results/checkpoints/dcgan_wasserstein/final_generator.pth"
-  sample_dir: "data/synthetic/dcgan_wasserstein/generation"
-  preview_dir: "data/synthetic/dcgan_wasserstein"
+  n_critic: 1  
 
 loss:
-  type: "wasserstein"
-  lambda_gp: 10
+  type: "hinge"  
 
 data:
-  train_dir: "data/processed/baseline/train/malignant"
+  train_dir: "data/processed/baseline/train"
   image_size: 128
+  balanced_classes: true 
 
 output:
-  sample_dir: "data/synthetic/dcgan_wasserstein"
-  metrics_dir: "results/gan_metrics/dcgan_wasserstein"
-  checkpoint_dir: "results/checkpoints/dcgan_wasserstein"
+  sample_dir: "data/synthetic/cdcgan_hinge"
+  metrics_dir: "results/gan_metrics/cdcgan_hinge"
   save_interval: 50
 
 evaluation:

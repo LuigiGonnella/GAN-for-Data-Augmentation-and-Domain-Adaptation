@@ -1,7 +1,6 @@
 experiment_name: baseline_freeze
 
-dataset:
-  type: baseline
+data_path: "data/processed/baseline"
 
 model:
   name: resnet50

@@ -1,18 +1,18 @@
 import sys
+import torch
+import argparse
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
-import argparse
 
 import yaml
 from train_classifier import main as train_main
-import pandas as pd
 
-def run_fine_tuning():
+def run_baseline():
 
-    print("FINETUNING TRAINING - earlier layers freezed and increasing lr")
+    print("BASELINE DATASET TRAINING - all layer freezed except for FCL head")
 
     parser = argparse.ArgumentParser(
-        description='BASELINE DATASET TRAINING - FINETUNING TRAINING - earlier layers freezed and increasing lr'
+        description='BASELINE DATASET TRAINING - all layer freezed except for FCL head'
     )
 
     parser.add_argument(
@@ -27,21 +27,17 @@ def run_fine_tuning():
         with open(args.config, 'r') as f:
             config = yaml.safe_load(f)
         
+        
         metrics = train_main(config)
-
-        print("FINETUNING COMPLETED")
-
+        
+        print("BASELINE COMPLETED")
+        
         return metrics
     
     except Exception as e:
-        print(f'Error with file name experiments/classifier_baseline_ft.yaml: {e}')
+        print(f'Error with file name experiments/classifier_baseline_freeze.yaml: {e}')
         return None
-   
 
-
-#to run only finetuning 
 if __name__ == '__main__':
-    result = run_fine_tuning()
+    result = run_baseline()
     print(result)
-
-
