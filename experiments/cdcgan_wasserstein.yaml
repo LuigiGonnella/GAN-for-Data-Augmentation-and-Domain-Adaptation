@@ -1,0 +1,40 @@
+model:
+  type: "cdcgan" 
+  conditional: true
+  generator:
+    latent_dim: 100
+    num_classes: 2  # benign=0, malignant=1
+    n1: 512
+    channels: 3
+    width: 128
+    height: 128
+  discriminator:
+    num_classes: 2 
+    channels: 3
+    width: 128
+    height: 128
+    dropout: 0.3
+
+training:
+  batch_size: 32
+  epochs: 300
+  g_lr: 0.0002
+  d_lr: 0.0001
+  n_critic: 5  
+
+loss:
+  type: "wasserstein"  
+  lambda_gp: 10 
+data:
+  train_dir: "data/processed/baseline/train"
+  image_size: 128
+  balanced_classes: true
+
+output:
+  sample_dir: "results/gan/cdcgan_wasserstein/samples"
+  metrics_dir: "results/gan/cdcgan_wasserstein/metrics"
+  save_interval: 50
+
+evaluation:
+  fid_is_interval: 50
+  fid_is_num_samples: 256
