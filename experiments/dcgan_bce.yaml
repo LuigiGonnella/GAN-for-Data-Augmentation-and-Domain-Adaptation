@@ -49,4 +49,4 @@ output:
 
 evaluation:
   fid_is_interval: 50
-  fid_is_num_samples: 256
+  fid_is_num_samples: 512
