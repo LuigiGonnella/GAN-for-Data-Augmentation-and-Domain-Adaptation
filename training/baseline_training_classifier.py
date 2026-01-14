@@ -7,24 +7,12 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import yaml
 from train_classifier import main as train_main
 
-def run_baseline():
+def run_baseline(config_path):
 
     print("BASELINE DATASET TRAINING - all layer freezed except for FCL head")
-
-    parser = argparse.ArgumentParser(
-        description='BASELINE DATASET TRAINING - all layer freezed except for FCL head'
-    )
-
-    parser.add_argument(
-        '--config', 
-        type=str, 
-        required=True,
-        help='Path to config YAML file')
-    
-    args = parser.parse_args()
     
     try:
-        with open(args.config, 'r') as f:
+        with open(config_path, 'r') as f:
             config = yaml.safe_load(f)
         
         
@@ -39,5 +27,16 @@ def run_baseline():
         return None
 
 if __name__ == '__main__':
-    result = run_baseline()
+    parser = argparse.ArgumentParser(
+        description='BASELINE DATASET TRAINING - all layer freezed except for FCL head'
+    )
+    parser.add_argument(
+        '--config', 
+        type=str, 
+        required=True,
+        help='Path to config YAML file'
+    )
+    args = parser.parse_args()
+    
+    result = run_baseline(args.config)
     print(result)

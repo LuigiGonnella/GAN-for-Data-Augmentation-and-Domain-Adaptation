@@ -1,6 +1,6 @@
 dataset:
-  malignant_count: 1000
-  benign_count: 10000
+  malignant_count: 2000
+  benign_count: 15000
   train_ratio: 0.7
   val_ratio: 0.15
   test_ratio: 0.15

@@ -7,24 +7,12 @@ import yaml
 from train_classifier import main as train_main
 import pandas as pd
 
-def run_fine_tuning():
+def run_fine_tuning(config_path):
 
     print("FINETUNING TRAINING - earlier layers freezed and increasing lr")
-
-    parser = argparse.ArgumentParser(
-        description='BASELINE DATASET TRAINING - FINETUNING TRAINING - earlier layers freezed and increasing lr'
-    )
-
-    parser.add_argument(
-        '--config', 
-        type=str, 
-        required=True,
-        help='Path to config YAML file')
-    
-    args = parser.parse_args()
     
     try:
-        with open(args.config, 'r') as f:
+        with open(config_path, 'r') as f:
             config = yaml.safe_load(f)
         
         metrics = train_main(config)
@@ -41,7 +29,18 @@ def run_fine_tuning():
 
 #to run only finetuning 
 if __name__ == '__main__':
-    result = run_fine_tuning()
+    parser = argparse.ArgumentParser(
+        description='BASELINE DATASET TRAINING - FINETUNING TRAINING - earlier layers freezed and increasing lr'
+    )
+    parser.add_argument(
+        '--config', 
+        type=str, 
+        required=True,
+        help='Path to config YAML file'
+    )
+    args = parser.parse_args()
+    
+    result = run_fine_tuning(args.config)
     print(result)
 
 

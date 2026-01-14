@@ -20,25 +20,13 @@ N_ITERATIONS = 10 #simulate 10 iterations of RandomSearch
 
 BEST_CONFIG_EPOCHS = 10
 
-def tune_with_hyperparams(hyperparams):
+def tune_with_hyperparams(hyperparams, config_path):
     
     print("BASELINE DATASET TRAINING - HYPERPARAMETER TUNING & FINETUNING'")
     print(f"TESTING PARAMS: {hyperparams}")
-
-    parser = argparse.ArgumentParser(
-        description='BASELINE DATASET TRAINING - HYPERPARAMETER TUNING & FINETUNING'
-    )
-
-    parser.add_argument(
-        '--config', 
-        type=str, 
-        required=True,
-        help='Path to config YAML file')
-    
-    args = parser.parse_args()
     
     try:
-        with open(args.config, 'r') as f:
+        with open(config_path, 'r') as f:
             config = yaml.safe_load(f)
         
         config['training']['params'] = {**config['training']['params'], **hyperparams}    
@@ -68,7 +56,7 @@ def tune_with_hyperparams(hyperparams):
         print(f"Error with hyperparameter {hyperparams}: {repr(e)}")
         return None
 
-def run_hyperparameter_tuning():
+def run_hyperparameter_tuning(config_path):
     print("RUNNING HYPERPARAMETER TUNING\n")
     
     print(f"Total iterations of RandomSearch: {N_ITERATIONS}\n")
@@ -87,7 +75,7 @@ def run_hyperparameter_tuning():
 
         print(f"PROCESSING ITERATION {iter+1}")
     
-        result, config = tune_with_hyperparams(params)
+        result, config = tune_with_hyperparams(params, config_path)
 
         # Clean CUDA cache after run
         try:
@@ -124,9 +112,9 @@ def run_hyperparameter_tuning():
     
     return best_config, results_df
 
-def run_best_config():
+def run_best_config(config_path):
 
-    best_config, results = run_hyperparameter_tuning()
+    best_config, results = run_hyperparameter_tuning(config_path)
     print(f'BEST CONFIG: {best_config}\nRESULTS: {results}')
 
     # run complete training with best config
@@ -158,6 +146,17 @@ def run_best_config():
 
 
 if __name__ == '__main__':
-    results = run_best_config()
+    parser = argparse.ArgumentParser(
+        description='BASELINE DATASET TRAINING - HYPERPARAMETER TUNING & FINETUNING'
+    )
+    parser.add_argument(
+        '--config', 
+        type=str, 
+        required=True,
+        help='Path to config YAML file'
+    )
+    args = parser.parse_args()
+    
+    results = run_best_config(args.config)
     print(results)
     

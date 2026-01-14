@@ -3,17 +3,17 @@ model:
   type: "dcgan_ht"
   generator:
     latent_dim: 
-    n1: 
-    channels: 
-    width: 
-    height: 
+    n1: 512
+    channels: 3
+    width: 128
+    height: 128
   discriminator: #PatchGAN
     channels: 3
-    width: 
-    height: 
-    n_layers:     # For 128×128 images → 14×14 output
+    width: 128
+    height: 128
+    n_layers:     
     dropout: 
-    ndf: 
+    ndf: 64
     
 #PATCHGAN LAYERS DETERMINE PATCHES according to the following scheme:
 #n_layers	Output_Size	Receptive_Field	Patch_Coverage
@@ -29,12 +29,12 @@ training:
   n_critic: 
 
 loss:
-  type: 
-  lambda_gp: #only for wasserstein
+  type:  #model to be decided
+  lambda_gp: 10 #only for wasserstein
 
 data:
   train_dir: "data/processed/baseline/train/malignant"
-  image_size: 
+  image_size: 128
 
 output:
   sample_dir: "data/synthetic/" #model to be decided
@@ -43,4 +43,4 @@ output:
 
 evaluation:
   fid_is_interval: 50
-  fid_is_num_samples: 256
+  fid_is_num_samples: 512

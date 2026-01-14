@@ -18,8 +18,8 @@ from evaluation.gan_metrics import GANMetrics
 
 class GANTrainer:
     
-    def __init__(self, config_path):
-        self.config = self._load_config(config_path)
+    def __init__(self, config):
+        self.config = config
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         
         print(f"Using device: {self.device}")
@@ -43,10 +43,6 @@ class GANTrainer:
         self.fid_is_interval = self.config.get('evaluation', {}).get('fid_is_interval', 50)
         self.fid_is_num_samples = self.config.get('evaluation', {}).get('fid_is_num_samples', 256)
     
-    def _load_config(self, config_path):
-        with open(config_path, 'r') as f:
-            config = yaml.safe_load(f)
-        return config
     
     def _create_output_dirs(self):
         dirs = [
@@ -109,8 +105,13 @@ class GANTrainer:
         image_size = self.config['data']['image_size']
         batch_size = self.config['training']['batch_size']
         
+        # Training augmentation for GANs - helps with limited medical data
         transform = transforms.Compose([
             transforms.Resize((image_size, image_size)),
+            transforms.RandomHorizontalFlip(p=0.5),
+            transforms.RandomVerticalFlip(p=0.5),
+            transforms.RandomRotation(degrees=20),
+            transforms.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0.05),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])  
         ])
@@ -150,14 +151,16 @@ class GANTrainer:
     
     def _generate_fake_images(self, num_samples, latent_dim):
         fake_images = []
+        num_generated = 0
         
         self.generator.eval()
         with torch.no_grad():
-            while len(fake_images) * fake_images[0].shape[0] if fake_images else 0 < num_samples:
-                batch_size = min(64, num_samples - (len(fake_images) * 64 if fake_images else 0))
+            while num_generated < num_samples:
+                batch_size = min(64, num_samples - num_generated)
                 z = torch.randn(batch_size, latent_dim, device=self.device)
                 batch_fake = self.generator(z)
                 fake_images.append(batch_fake)
+                num_generated += batch_size
         
         fake_images = torch.cat(fake_images, dim=0)[:num_samples]
         self.generator.train()
@@ -292,7 +295,7 @@ class GANTrainer:
             
             if (epoch + 1) % self.fid_is_interval == 0:
                 self._compute_fid_is(latent_dim)
-            
+        
             if (epoch + 1) % 100 == 0:
                 mode_collapse_info = self.metrics.detect_mode_collapse(fake_images)
                 vanishing_info = self.metrics.detect_vanishing_gradients()
@@ -302,7 +305,10 @@ class GANTrainer:
                 print(f"  Vanishing Gradients: {vanishing_info['has_vanishing_gradients']} "
                       f"(g_grad: {vanishing_info['g_gradient_magnitude']:.6f})")
         
+
+        self._compute_fid_is(latent_dim)
         print("\nTraining complete!")
+
         self._save_samples(epochs - 1, latent_dim, final=True)
         self._save_checkpoint(epochs - 1, final=True)
         self.metrics.save_metrics()
@@ -316,7 +322,9 @@ class GANTrainer:
             )]
             self.metrics.plot_quality_metrics(fid_scores=fid_scores, is_scores=is_scores)
         
-        print(f"Results saved to: {self.config['output']['sample_dir']}")
+        print(f"Results saved to: {self.config['output']['sample_dir']}") 
+
+        return self.metrics.metrics_history['fid_score'][-1]
     
     def _save_samples(self, epoch, latent_dim, final=False):
         """Generate and save sample images"""
@@ -378,8 +386,13 @@ def main():
     if not config_path.exists():
         print(f"Config file not found: {config_path}")
         sys.exit(1)
-    
-    trainer = GANTrainer(config_path)
+    try:
+        with open(config_path, 'r') as f:
+            config = yaml.safe_load(f)
+    except Exception as e:
+        print(f'Exception occurred: {e}')
+
+    trainer = GANTrainer(config)
     trainer.train()
 
 

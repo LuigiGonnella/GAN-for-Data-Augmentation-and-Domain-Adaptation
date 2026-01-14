@@ -21,10 +21,10 @@ model:
 #   5	         2×2	    ~Full image	    Similar to DCGAN
 
 training:
-  batch_size: 32
+  batch_size: 64
   epochs: 300
   g_lr: 0.0002
-  d_lr: 0.0001
+  d_lr: 0.0002
   n_critic: 5
 
 generation:

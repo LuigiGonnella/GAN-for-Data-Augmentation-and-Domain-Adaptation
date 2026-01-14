@@ -48,6 +48,11 @@ def load_and_preprocess_data(malignant_count, benign_count):
 
 
 def copy_images(images, src_folder, dst_folder):
+    #delete files from dst_folder
+    for file in dst_folder.glob("*"):
+        if file.is_file():
+            file.unlink()
+            
     for img in images:
         img_path = img + '.jpg'
         shutil.copy(os.path.join(src_folder, img_path), dst_folder)
