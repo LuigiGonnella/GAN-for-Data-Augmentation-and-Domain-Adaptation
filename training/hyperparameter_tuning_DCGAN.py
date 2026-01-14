@@ -47,9 +47,10 @@ def tune_lr(lr_params, config):
     config['training']['d_lr'] = lr_params['d_lr']
     config['training']['epochs'] = CONFIG_EPOCHS
     
-    config['output']['sample_dir'] += '_ht_lr'
-    config['output']['metrics_dir'] += '_ht_lr'
-    config['output']['checkpoint_dir'] += '_ht_lr'
+    if not config['output']['sample_dir'].endswith('_lr'):
+        config['output']['sample_dir'] += '_ht_lr'
+        config['output']['metrics_dir'] += '_ht_lr'
+        config['output']['checkpoint_dir'] += '_ht_lr'
 
     trainer = GANTrainer(config)
     fid_score = trainer.train()
@@ -137,7 +138,7 @@ def run_lr_tuning(config_path):
     
     return config['loss']['type'], best_g_lr, best_d_lr
 
-def tune_with_hyperparams(hyperparams, config):
+def tune_with_hyperparams(hyperparams, config, id):
     
     print("BASELINE DATASET TRAINING - HYPERPARAMETER TUNING'")
     print(f"TESTING PARAMS: {hyperparams}")
@@ -153,9 +154,10 @@ def tune_with_hyperparams(hyperparams, config):
         config['training']['n_critic'] = hyperparams['n_critic']
         config['training']['epochs'] = CONFIG_EPOCHS
 
-        config['output']['sample_dir'] += '_ht'
-        config['output']['metrics_dir'] += '_ht'
-        config['output']['checkpoint_dir'] += '_ht'
+        if not config['output']['sample_dir'].endswith('_ht'):
+            config['output']['sample_dir'] += '_ht'
+            config['output']['metrics_dir'] += '_ht'
+            config['output']['checkpoint_dir'] += '_ht'
 
         trainer = GANTrainer(config)
         fid_scores = trainer.train()
@@ -187,7 +189,7 @@ def run_hyperparameter_tuning(config):
 
         print(f"PROCESSING ITERATION {iter+1}")
     
-        fid_scores, config = tune_with_hyperparams(params, config)
+        fid_scores, config = tune_with_hyperparams(params, config, iter+1)
         
 
         if fid_scores is not None:
