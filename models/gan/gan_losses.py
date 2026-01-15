@@ -51,7 +51,7 @@ class WassersteinLoss:
         """
         return -torch.mean(fake_output)
     
-    def gradient_penalty(self, discriminator, real_data, fake_data):
+    def gradient_penalty(self, discriminator, real_data, fake_data, labels=None):
         batch_size = real_data.size(0)
         device = real_data.device
         
@@ -60,7 +60,10 @@ class WassersteinLoss:
         interpolates = alpha * real_data + (1 - alpha) * fake_data
         interpolates.requires_grad_(True)
         
-        d_interpolates = discriminator(interpolates)
+        if labels is not None:
+            d_interpolates = discriminator(interpolates, labels)
+        else:
+            d_interpolates = discriminator(interpolates)
         
         fake = torch.ones(batch_size, 1, device=device)
         
