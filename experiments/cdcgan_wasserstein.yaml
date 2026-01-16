@@ -38,8 +38,8 @@ data:
   balanced_classes: true
 
 output:
-  sample_dir: "results/gan/cdcgan_wasserstein/samples"
-  metrics_dir: "results/gan/cdcgan_wasserstein/metrics"
+  sample_dir: "data/synthetic/cdcgan_wasserstein"
+  metrics_dir: "results/gan_metrics/cdcgan_wasserstein"
   save_interval: 50
 
 evaluation:
