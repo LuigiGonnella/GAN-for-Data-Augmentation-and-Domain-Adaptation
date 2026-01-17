@@ -3,17 +3,19 @@ model:
   type: "cdcgan_ht"
   generator:
     latent_dim: 
-    n1: 
-    channels: 
-    width: 
-    height: 
+    n1: 512
+    channels: 3
+    width: 128
+    height: 128
   discriminator: #PatchGAN
     num_classes: 2
     channels: 3
-    width: 
-    height: 
+    width: 128
+    height: 128
     n_layers:    # For 128×128 images → 14×14 output
     dropout: 
+    ndf: 64
+
     
 #PATCHGAN LAYERS DETERMINE PATCHES according to the following scheme:
 #n_layers	Output_Size	Receptive_Field	Patch_Coverage
@@ -30,17 +32,18 @@ training:
 
 loss:
   type: 
-  lambda_gp: #only for wasserstein
+  lambda_gp: 10 #only for wasserstein
 
 data:
   train_dir: "data/processed/baseline/train/malignant"
-  image_size: 
+  image_size: 128
 
 output:
   sample_dir: "data/synthetic/" #model to be decided
   metrics_dir: "results/gan_metrics/" #model to be decided
+  checkpoint_dir: "results/checkpoints/" #model to be decided
   save_interval: 50
 
 evaluation:
   fid_is_interval: 50
-  fid_is_num_samples: 256
+  fid_is_num_samples: 512

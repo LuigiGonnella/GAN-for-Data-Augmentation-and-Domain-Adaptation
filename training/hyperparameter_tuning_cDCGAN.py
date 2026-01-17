@@ -44,7 +44,6 @@ def tune_lr(lr_params, config):
     if not config['output']['sample_dir'].endswith('_lr'):
         config['output']['sample_dir'] += '_ht_lr'
         config['output']['metrics_dir'] += '_ht_lr'
-        config['output'].setdefault('checkpoint_dir', 'results/checkpoints')
         config['output']['checkpoint_dir'] += '_ht_lr'
 
     trainer = ConditionalGANTrainer(config)
@@ -124,7 +123,7 @@ def run_lr_tuning(config_path):
             config = yaml.safe_load(f)
         loss_type = config['loss']['type']
     except:
-        loss_type = 'bce'
+        return None, None, None
     
     return loss_type, best_g_lr, best_d_lr
 
@@ -148,7 +147,6 @@ def tune_with_hyperparams(hyperparams, config, id):
         if not config['output']['sample_dir'].endswith('_ht'):
             config['output']['sample_dir'] += '_ht'
             config['output']['metrics_dir'] += '_ht'
-            config['output'].setdefault('checkpoint_dir', 'results/checkpoints')
             config['output']['checkpoint_dir'] += '_ht'
 
         trainer = ConditionalGANTrainer(config)
@@ -243,7 +241,6 @@ def run_best_config(loss_type, config_path, g_lr, d_lr):
     config['loss']['type'] = loss_type
     config['output']['sample_dir'] += f'_{loss_type}_ht'
     config['output']['metrics_dir'] += f'_{loss_type}_ht'
-    config['output'].setdefault('checkpoint_dir', 'results/checkpoints')
     config['output']['checkpoint_dir'] += f'_{loss_type}_ht'
     config['training']['g_lr'] = g_lr
     config['training']['d_lr'] = d_lr
@@ -302,5 +299,6 @@ if __name__ == '__main__':
         print("Error: Learning rate tuning failed")
         sys.exit(1)
 
-    config_path = args.config
+    config_path = 'experiments/cdcgan_ht.yaml'
+
     results = run_best_config(loss_type, config_path, g_lr, d_lr)

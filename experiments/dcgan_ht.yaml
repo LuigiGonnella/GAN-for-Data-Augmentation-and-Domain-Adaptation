@@ -39,6 +39,7 @@ data:
 output:
   sample_dir: "data/synthetic/" #model to be decided
   metrics_dir: "results/gan_metrics/" #model to be decided
+  checkpoint_dir: "results/checkpoints/" #model to be decided
   save_interval: 50
 
 evaluation:
