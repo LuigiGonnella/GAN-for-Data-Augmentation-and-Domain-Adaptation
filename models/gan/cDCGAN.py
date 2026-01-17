@@ -58,57 +58,56 @@ class ConditionalPatchGANDiscriminatorSN(nn.Module):
     Class conditioning via projection discriminator approach.
     """
 
-    def __init__(self, num_classes=2, ndf=64, channels=3, width=128, height=128, dropout=0.3):
+    def __init__(self, num_classes=2, ndf=64, channels=3, n_layers=3, width=128, height=128, dropout=0.3):
         super(ConditionalPatchGANDiscriminatorSN, self).__init__()
         
         self.num_classes = num_classes
         
-        # Class embedding for projection discriminator
-        self.class_embedding = nn.Embedding(num_classes, ndf * 8)
-        
-        # PatchGAN architecture with spectral normalization
-        # No BatchNorm (incompatible with SN in discriminator)
-        self.conv_layers = nn.Sequential(
-            # Layer 1: 128x128 -> 64x64
+        # First conv layer (no normalization)
+        model = [
             nn.utils.spectral_norm(
                 nn.Conv2d(channels, ndf, kernel_size=4, stride=2, padding=1)
             ),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Dropout2d(dropout),
+            nn.Dropout2d(dropout)
+        ]
+        
+        # Gradually increase number of filters
+        nf_mult = 1
+        for n in range(1, n_layers):
+            nf_mult_prev = nf_mult
+            nf_mult = min(2 ** n, 8)  # Cap at 8x base filters
             
-            # Layer 2: 64x64 -> 32x32
+            model += [
+                nn.utils.spectral_norm(
+                    nn.Conv2d(ndf * nf_mult_prev, ndf * nf_mult,
+                             kernel_size=4, stride=2, padding=1)
+                ),
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.Dropout2d(dropout)
+            ]
+        
+        # Penultimate layer (stride=1 to maintain spatial dimensions)
+        nf_mult_prev = nf_mult
+        nf_mult = min(2 ** n_layers, 8)
+        model += [
             nn.utils.spectral_norm(
-                nn.Conv2d(ndf, ndf * 2, kernel_size=4, stride=2, padding=1)
+                nn.Conv2d(ndf * nf_mult_prev, ndf * nf_mult,
+                         kernel_size=4, stride=1, padding=1)
             ),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Dropout2d(dropout),
-            
-            # Layer 3: 32x32 -> 16x16
-            nn.utils.spectral_norm(
-                nn.Conv2d(ndf * 2, ndf * 4, kernel_size=4, stride=2, padding=1)
-            ),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Dropout2d(dropout),
-            
-            # Layer 4: 16x16 -> 8x8
-            nn.utils.spectral_norm(
-                nn.Conv2d(ndf * 4, ndf * 8, kernel_size=4, stride=2, padding=1)
-            ),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Dropout2d(dropout),
-            
-            # Layer 5 (stride=1): 8x8 -> 8x8 (maintain spatial dims)
-            nn.utils.spectral_norm(
-                nn.Conv2d(ndf * 8, ndf * 8, kernel_size=4, stride=1, padding=1)
-            ),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Dropout2d(dropout),
-        )
+            nn.Dropout2d(dropout)
+        ]
+        
+        self.conv_layers = nn.Sequential(*model)
+        
+        # Class embedding for projection discriminator
+        self.class_embedding = nn.Embedding(num_classes, ndf * nf_mult)
         
         # Final projection layer for PatchGAN output
         # Produces spatial logits (no sigmoid)
         self.output_conv = nn.utils.spectral_norm(
-            nn.Conv2d(ndf * 8, 1, kernel_size=4, stride=1, padding=1)
+            nn.Conv2d(ndf * nf_mult, 1, kernel_size=4, stride=1, padding=1)
         )
     
     def forward(self, x, labels):
@@ -154,49 +153,51 @@ class ConditionalPatchGANDiscriminator(nn.Module):
     Uses BatchNorm for stability (alternative to spectral normalization).
     """
 
-    def __init__(self, num_classes=2, ndf=64, channels=3, width=128, height=128, dropout=0.3):
+    def __init__(self, num_classes=2, ndf=64, channels=3, n_layers=3, width=128, height=128, dropout=0.3):
         super(ConditionalPatchGANDiscriminator, self).__init__()
         
         self.num_classes = num_classes
         
-        # Class embedding for projection discriminator
-        self.class_embedding = nn.Embedding(num_classes, ndf * 8)
-        
-        # PatchGAN architecture with BatchNorm
-        self.conv_layers = nn.Sequential(
-            # Layer 1: 128x128 -> 64x64 (no norm on first layer)
+        # First conv layer (no normalization)
+        model = [
             nn.Conv2d(channels, ndf, kernel_size=4, stride=2, padding=1),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Dropout2d(dropout),
+            nn.Dropout2d(dropout)
+        ]
+        
+        # Gradually increase number of filters
+        nf_mult = 1
+        for n in range(1, n_layers):
+            nf_mult_prev = nf_mult
+            nf_mult = min(2 ** n, 8)  # Cap at 8x base filters
             
-            # Layer 2: 64x64 -> 32x32
-            nn.Conv2d(ndf, ndf * 2, kernel_size=4, stride=2, padding=1),
-            nn.BatchNorm2d(ndf * 2),
+            model += [
+                nn.Conv2d(ndf * nf_mult_prev, ndf * nf_mult,
+                         kernel_size=4, stride=2, padding=1),
+                nn.BatchNorm2d(ndf * nf_mult),
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.Dropout2d(dropout)
+            ]
+        
+        # Penultimate layer (stride=1 to maintain spatial dimensions)
+        nf_mult_prev = nf_mult
+        nf_mult = min(2 ** n_layers, 8)
+        model += [
+            nn.Conv2d(ndf * nf_mult_prev, ndf * nf_mult,
+                     kernel_size=4, stride=1, padding=1),
+            nn.BatchNorm2d(ndf * nf_mult),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Dropout2d(dropout),
-            
-            # Layer 3: 32x32 -> 16x16
-            nn.Conv2d(ndf * 2, ndf * 4, kernel_size=4, stride=2, padding=1),
-            nn.BatchNorm2d(ndf * 4),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Dropout2d(dropout),
-            
-            # Layer 4: 16x16 -> 8x8
-            nn.Conv2d(ndf * 4, ndf * 8, kernel_size=4, stride=2, padding=1),
-            nn.BatchNorm2d(ndf * 8),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Dropout2d(dropout),
-            
-            # Layer 5 (stride=1): 8x8 -> 8x8 (maintain spatial dims)
-            nn.Conv2d(ndf * 8, ndf * 8, kernel_size=4, stride=1, padding=1),
-            nn.BatchNorm2d(ndf * 8),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Dropout2d(dropout),
-        )
+            nn.Dropout2d(dropout)
+        ]
+        
+        self.conv_layers = nn.Sequential(*model)
+        
+        # Class embedding for projection discriminator
+        self.class_embedding = nn.Embedding(num_classes, ndf * nf_mult)
         
         # Final projection layer for PatchGAN output
         # Produces spatial logits (no sigmoid)
-        self.output_conv = nn.Conv2d(ndf * 8, 1, kernel_size=4, stride=1, padding=1)
+        self.output_conv = nn.Conv2d(ndf * nf_mult, 1, kernel_size=4, stride=1, padding=1)
     
     def forward(self, x, labels):
         """

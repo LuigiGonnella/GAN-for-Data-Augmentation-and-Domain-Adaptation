@@ -65,7 +65,10 @@ class WassersteinLoss:
         else:
             d_interpolates = discriminator(interpolates)
         
-        fake = torch.ones(batch_size, 1, device=device)
+        # Handle both scalar and spatial (PatchGAN) outputs
+        # For PatchGAN: d_interpolates shape is [B, 1, N, N]
+        # We need grad_outputs to match this shape
+        fake = torch.ones_like(d_interpolates, device=device)
         
         gradients = torch.autograd.grad(
             outputs=d_interpolates,

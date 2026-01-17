@@ -42,7 +42,7 @@ data:
   image_size: 128
 
 output:
-  sample_dir: "data/synthetic/dcgan_hinge/training"
+  sample_dir: "data/synthetic/dcgan_hinge"
   metrics_dir: "results/gan_metrics/dcgan_hinge"
   checkpoint_dir: "results/checkpoints/dcgan_hinge"
   save_interval: 50
