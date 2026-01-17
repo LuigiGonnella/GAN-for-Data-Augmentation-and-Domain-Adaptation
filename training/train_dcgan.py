@@ -69,20 +69,20 @@ class GANTrainer:
     def _build_discriminator_without_SN(self):
         disc_config = self.config['model']['discriminator']
         discriminator = PatchGANDiscriminator(
-            num_classes=disc_config['num_classes'],
             channels=disc_config['channels'],
             dropout=disc_config['dropout'],
-            ndf= disc_config['ndf']
+            ndf= disc_config['ndf'],
+            n_layers= disc_config['n_layers']
         ).to(self.device)
         return discriminator
     
     def _build_discriminator_with_SN(self):
         disc_config = self.config['model']['discriminator']
         discriminator = PatchGANDiscriminatorSN(
-            num_classes=disc_config['num_classes'],
             channels=disc_config['channels'],
             dropout=disc_config['dropout'],
-            ndf= disc_config['ndf']
+            ndf= disc_config['ndf'],
+            n_layers= disc_config['n_layers']
         ).to(self.device)
         return discriminator
     

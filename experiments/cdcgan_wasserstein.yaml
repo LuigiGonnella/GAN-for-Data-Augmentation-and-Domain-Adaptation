@@ -11,6 +11,7 @@ model:
   discriminator: #PatchGAN
     num_classes: 2
     channels: 3
+    ndf: 64
     width: 128
     height: 128
     n_layers: 3    # For 128×128 images → 14×14 output
@@ -23,25 +24,33 @@ model:
 #   5	         2×2	    ~Full image	    Similar to DCGAN
 
 training:
-  batch_size: 32
+  batch_size: 64
   epochs: 300
   g_lr: 0.0002
   d_lr: 0.0001
   n_critic: 5  
 
+generation:
+  batch_size: 64
+  num_samples: 3000
+  checkpoint: "results/checkpoints/cdcgan_wasserstein/final_generator.pth"
+  sample_dir: "data/synthetic/cdcgan_wasserstein/generation"
+  preview_dir: "data/synthetic/cdcgan_wasserstein"
+
 loss:
   type: "wasserstein"  
   lambda_gp: 10 
+
 data:
   train_dir: "data/processed/baseline/train"
   image_size: 128
-  balanced_classes: true
 
 output:
   sample_dir: "data/synthetic/cdcgan_wasserstein"
   metrics_dir: "results/gan_metrics/cdcgan_wasserstein"
+  checkpoint_dir: "results/checkpoints/cdcgan_wasserstein"
   save_interval: 50
 
 evaluation:
   fid_is_interval: 50
-  fid_is_num_samples: 256
+  fid_is_num_samples: 512

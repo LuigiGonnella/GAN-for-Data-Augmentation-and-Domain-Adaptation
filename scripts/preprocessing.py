@@ -49,6 +49,7 @@ def load_and_preprocess_data(malignant_count, benign_count):
 
 def copy_images(images, src_folder, dst_folder):
     #delete files from dst_folder
+    dst_folder = Path(dst_folder)
     for file in dst_folder.glob("*"):
         if file.is_file():
             file.unlink()
@@ -94,7 +95,7 @@ def populate_baseline_and_augmented(seed, df, val_ratio, test_ratio):
     train_malignant_path = os.path.join(config.BASELINE_PATH, 'train', 'malignant')
     len_malignant_train = copy_images(train_malignant_images, config.RAW_DATA_PATH, train_malignant_path)
     
-    print(f'COPIED {len_malignant_train} MALIGNANT IMAGES IN train/malignant FOLDER')
+    print(f'COPIED {len_malignant_train} MALIGNANT IMAGES IN baseline/train/malignant FOLDER')
 
     baseline_test_path = os.path.join(config.BASELINE_PATH, 'test')
     baseline_len_test = copy_images(test_images, config.RAW_DATA_PATH, baseline_test_path)

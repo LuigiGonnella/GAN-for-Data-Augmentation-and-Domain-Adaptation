@@ -15,7 +15,8 @@ model:
     height: 128
     n_layers: 3    # For 128×128 images → 14×14 output
     dropout: 0.3
-    
+    ndf: 64
+
 #PATCHGAN LAYERS DETERMINE PATCHES according to the following scheme:
 #n_layers	Output_Size	Receptive_Field	Patch_Coverage
 #   3	        14×14	    70×70 pixels	 ~50% overlap
@@ -23,11 +24,18 @@ model:
 #   5	         2×2	    ~Full image	    Similar to DCGAN
 
 training:
-  batch_size: 32
+  batch_size: 64
   epochs: 300
   g_lr: 0.0002
   d_lr: 0.0001
   n_critic: 1
+
+generation:
+  batch_size: 64
+  num_samples: 3000
+  checkpoint: "results/checkpoints/cdcgan_mse/final_generator.pth"
+  sample_dir: "data/synthetic/cdcgan_mse/generation"
+  preview_dir: "data/synthetic/cdcgan_mse"
 
 loss:
   type: "mse" 
@@ -35,13 +43,13 @@ loss:
 data:
   train_dir: "data/processed/baseline/train"
   image_size: 128
-  balanced_classes: true
 
 output:
   sample_dir: "data/synthetic/cdcgan_mse"
   metrics_dir: "results/gan_metrics/cdcgan_mse"
+  checkpoint_dir: "results/checkpoints/cdcgan_mse" 
   save_interval: 50
 
 evaluation:
   fid_is_interval: 50
-  fid_is_num_samples: 256
+  fid_is_num_samples: 512

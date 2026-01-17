@@ -289,6 +289,11 @@ if __name__ == '__main__':
         required=True,
         help='Path to config YAML file with a specified loss'
     )
+    parser.add_argument(
+        '--only_lr',
+        action='store_true',
+        help='Only run learning rate tuning and exit (skip hyperparameter tuning)'
+    )
     args = parser.parse_args()
 
 
@@ -298,6 +303,12 @@ if __name__ == '__main__':
     if g_lr is None:
         print("Error: Learning rate tuning failed")
         sys.exit(1)
+
+    if args.only_lr:
+        print("\n" + "="*60)
+        print("Learning rate tuning completed. Exiting (--only_lr flag set).")
+        print("="*60)
+        sys.exit(0)
 
     config_path = 'experiments/cdcgan_ht.yaml'
 

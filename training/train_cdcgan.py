@@ -28,7 +28,7 @@ class ConditionalGANTrainer:
         self._create_output_dirs()
         
         self.generator = self._build_generator()
-        
+
         if config['loss']['type'] == 'hinge':
             self.discriminator = self._build_discriminator_with_SN()
         else:
@@ -73,7 +73,8 @@ class ConditionalGANTrainer:
             num_classes=disc_config['num_classes'],
             channels=disc_config['channels'],
             dropout=disc_config['dropout'],
-            ndf= disc_config['ndf']
+            ndf= disc_config['ndf'],
+            n_layers= disc_config['n_layers']
         ).to(self.device)
         return discriminator
     
@@ -83,7 +84,8 @@ class ConditionalGANTrainer:
             num_classes=disc_config['num_classes'],
             channels=disc_config['channels'],
             dropout=disc_config['dropout'],
-            ndf= disc_config['ndf']
+            ndf= disc_config['ndf'],
+            n_layers= disc_config['n_layers']
         ).to(self.device)
         return discriminator
     
