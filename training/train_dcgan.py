@@ -206,7 +206,7 @@ class GANTrainer:
             print(f"Error computing FID/IS: {str(e)}")
             return None, None, None
     
-    def train(self):
+    def train(self, n_iter=False):
         epochs = self.config['training']['epochs']
         n_critic = self.config['training'].get('n_critic', 1)  # For Wasserstein
         save_interval = self.config['output']['save_interval']
@@ -304,8 +304,8 @@ class GANTrainer:
                   f"D(Real): {avg_d_real:.4f} | D(Fake): {avg_d_fake:.4f}")
             
             if (epoch + 1) % save_interval == 0:
-                self._save_samples(epoch, latent_dim)
-                self._save_checkpoint(epoch)
+                self._save_samples(epoch, latent_dim, n_iter=n_iter)
+                self._save_checkpoint(epoch, n_iter=n_iter)
             
             if (epoch + 1) % self.fid_is_interval == 0:
                 self._compute_fid_is(latent_dim)
@@ -323,10 +323,10 @@ class GANTrainer:
         self._compute_fid_is(latent_dim)
         print("\nTraining complete!")
 
-        self._save_samples(epochs - 1, latent_dim, final=True)
-        self._save_checkpoint(epochs - 1, final=True)
-        self.metrics.save_metrics()
-        self.metrics.plot_losses()
+        self._save_samples(epochs - 1, latent_dim, final=True, n_iter=n_iter)
+        self._save_checkpoint(epochs - 1, final=True, n_iter=n_iter)
+        self.metrics.save_metrics(n_iter=n_iter)
+        self.metrics.plot_losses(n_iter=n_iter)
         
         if self.metrics.metrics_history['fid_score']:
             fid_scores = self.metrics.metrics_history['fid_score']
@@ -334,15 +334,22 @@ class GANTrainer:
                 self.metrics.metrics_history['is_score_mean'],
                 self.metrics.metrics_history['is_score_std']
             )]
-            self.metrics.plot_quality_metrics(fid_scores=fid_scores, is_scores=is_scores)
+            self.metrics.plot_quality_metrics(fid_scores=fid_scores, is_scores=is_scores, n_iter=n_iter)
         
         print(f"Results saved to: {self.config['output']['sample_dir']}") 
 
-        return self.metrics.metrics_history['fid_score'][-1]
+        # Return minimum FID score for hyperparameter selection
+        if self.metrics.metrics_history['fid_score']:
+            best_fid = min(self.metrics.metrics_history['fid_score'])
+            print(f"Best FID score achieved: {best_fid:.4f}")
+            return best_fid
+        else:
+            return float('inf')
     
-    def _save_samples(self, epoch, latent_dim, final=False):
+    def _save_samples(self, epoch, latent_dim, final=False, n_iter=False):
         """Generate and save sample images"""
         sample_dir = Path(self.config['output']['sample_dir'])
+      
         
         self.generator.eval()
         with torch.no_grad():
@@ -353,16 +360,22 @@ class GANTrainer:
         from torchvision.utils import save_image
         
         if final:
-            filename = 'final_samples.png'
+            filename = 'final_samples'
         else:
-            filename = f'samples_epoch_{epoch+1}.png'
+            filename = f'samples_epoch_{epoch+1}'
+        
+          
+        if n_iter != False:
+            filename += f'_iter_{n_iter}.png'
+        else:
+            filename += '.png'
         
         save_image(samples, sample_dir / filename, nrow=4, padding=2)
         print(f"Saved samples: {filename}")
         
         self.generator.train()
     
-    def _save_checkpoint(self, epoch, final=False):
+    def _save_checkpoint(self, epoch, final=False, n_iter=False):
         """Save model checkpoints"""
         checkpoint_dir = Path(self.config['output'].get('checkpoint_dir', 'results/checkpoints'))
         checkpoint_dir.mkdir(parents=True, exist_ok=True)
@@ -377,13 +390,21 @@ class GANTrainer:
         }
         
         if final:
-            filename = 'final_checkpoint.pth'
+            filename = 'final_checkpoint'
             # Also save generator separately for easy loading
-            generator_filename = 'final_generator.pth'
+            if n_iter != False:
+                generator_filename = f'final_generator_iter_{n_iter}.pth'
+            else:
+                generator_filename = 'final_generator.pth'
             torch.save(self.generator.state_dict(), checkpoint_dir / generator_filename)
             print(f"Saved final generator: {generator_filename}")
         else:
-            filename = f'checkpoint_epoch_{epoch+1}.pth'
+            filename = f'checkpoint_epoch_{epoch+1}'
+        
+        if n_iter != False:
+            filename += f'_iter_{n_iter}.pth'
+        else:
+            filename += '.pth'
         
         torch.save(checkpoint, checkpoint_dir / filename)
         print(f"Saved checkpoint: {filename}")

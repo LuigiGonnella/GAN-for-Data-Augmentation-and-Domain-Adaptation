@@ -49,8 +49,11 @@ class GANMetrics:
         self.metrics_history['is_score_mean'].append(float(is_score_mean))
         self.metrics_history['is_score_std'].append(float(is_score_std))
     
-    def save_metrics(self):
-        csv_path = self.output_dir / 'training_metrics.csv'
+    def save_metrics(self, n_iter):
+        if n_iter != False:
+            csv_path = self.output_dir / f'training_metrics_iter_{n_iter}.csv'
+        else:
+            csv_path = self.output_dir / 'training_metrics.csv'
         
         with open(csv_path, 'w', newline='') as f:
             writer = csv.DictWriter(f, fieldnames=self.metrics_history.keys())
@@ -219,7 +222,7 @@ class GANMetrics:
             'threshold': vanishing_threshold
         }
     
-    def plot_losses(self, save_path=None):
+    def plot_losses(self, save_path=None, n_iter=False):
         """
         Plot generator and discriminator losses over time
         
@@ -227,7 +230,11 @@ class GANMetrics:
         if save_path is None:
             plots_dir = self.output_dir / 'plots'
             plots_dir.mkdir(parents=True, exist_ok=True)
-            save_path = plots_dir / 'losses.png'
+            
+            if n_iter != False:
+                save_path = plots_dir / f'losses_iter_{n_iter}.png'
+            else:
+                save_path = plots_dir / 'losses.png'
         else:
             save_path = Path(save_path)
             save_path.parent.mkdir(parents=True, exist_ok=True)
@@ -266,12 +273,16 @@ class GANMetrics:
         
         print(f"Loss plots saved to {save_path}")
     
-    def plot_quality_metrics(self, fid_scores=None, is_scores=None, save_path=None):
+    def plot_quality_metrics(self, fid_scores=None, is_scores=None, save_path=None, n_iter=False):
 
         if save_path is None:
             plots_dir = self.output_dir / 'plots'
             plots_dir.mkdir(parents=True, exist_ok=True)
-            save_path = plots_dir / 'quality_metrics.png'
+            
+            if n_iter != False:
+                save_path = plots_dir / f'quality_metrics_iter_{n_iter}.png'
+            else:
+                save_path = plots_dir / 'quality_metrics.png'
         else:
             save_path = Path(save_path)
             save_path.parent.mkdir(parents=True, exist_ok=True)

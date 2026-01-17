@@ -32,7 +32,7 @@ LR_COMBINATIONS = [
 ]
 
 
-def tune_lr(lr_params, config):
+def tune_lr(lr_params, config, id):
     """
     Tune learning rates for generator and discriminator
 
@@ -47,7 +47,7 @@ def tune_lr(lr_params, config):
         config['output']['checkpoint_dir'] += '_ht_lr'
 
     trainer = ConditionalGANTrainer(config)
-    fid_score = trainer.train()
+    fid_score = trainer.train(n_iter=id)
     
     return fid_score, config
 
@@ -73,7 +73,7 @@ def run_lr_tuning(config_path):
         print(f"  Generator LR: {lr_params['g_lr']:.0e}")
         print(f"  Discriminator LR: {lr_params['d_lr']:.0e}")
         
-        result = tune_lr(lr_params, config.copy())
+        result = tune_lr(lr_params, config.copy(), idx)
         
         if result is not None:
             fid_score, config = result
@@ -150,7 +150,7 @@ def tune_with_hyperparams(hyperparams, config, id):
             config['output']['checkpoint_dir'] += '_ht'
 
         trainer = ConditionalGANTrainer(config)
-        fid_score = trainer.train()
+        fid_score = trainer.train(n_iter=id)
 
         return fid_score, config
         
@@ -294,21 +294,37 @@ if __name__ == '__main__':
         action='store_true',
         help='Only run learning rate tuning and exit (skip hyperparameter tuning)'
     )
+    parser.add_argument(
+        '--not_lr',
+        action='store_true',
+        help='Skip learning rate tuning and use learning rates from config file'
+    )
     args = parser.parse_args()
 
+    if args.not_lr:
+        # Skip LR tuning, use values from config
+        try:
+            with open(args.config, 'r') as f:
+                config = yaml.safe_load(f)
+            loss_type = config['loss']['type']
+            g_lr = config['training']['g_lr']
+            d_lr = config['training']['d_lr']
+            print(f"Skipping LR tuning. Using config values: g_lr={g_lr:.0e}, d_lr={d_lr:.0e}")
+        except Exception as e:
+            print(f'Error reading config: {e}')
+            sys.exit(1)
+    else:
+        loss_type, g_lr, d_lr = run_lr_tuning(args.config)
+        
+        if g_lr is None:
+            print("Error: Learning rate tuning failed")
+            sys.exit(1)
 
-
-    loss_type, g_lr, d_lr = run_lr_tuning(args.config)
-    
-    if g_lr is None:
-        print("Error: Learning rate tuning failed")
-        sys.exit(1)
-
-    if args.only_lr:
-        print("\n" + "="*60)
-        print("Learning rate tuning completed. Exiting (--only_lr flag set).")
-        print("="*60)
-        sys.exit(0)
+        if args.only_lr:
+            print("\n" + "="*60)
+            print("Learning rate tuning completed. Exiting (--only_lr flag set).")
+            print("="*60)
+            sys.exit(0)
 
     config_path = 'experiments/cdcgan_ht.yaml'
 
