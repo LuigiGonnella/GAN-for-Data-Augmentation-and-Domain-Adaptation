@@ -11,7 +11,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from models.gan.cDCGAN import ConditionalDCGANGenerator, ConditionalDCGANDiscriminator
+from models.gan.cDCGAN import ConditionalDCGANGenerator, ConditionalPatchGANDiscriminator, ConditionalPatchGANDiscriminatorSN
 from models.gan.gan_losses import get_loss_fn
 from evaluation.gan_metrics import GANMetrics
 
@@ -28,7 +28,11 @@ class ConditionalGANTrainer:
         self._create_output_dirs()
         
         self.generator = self._build_generator()
-        self.discriminator = self._build_discriminator()
+        
+        if config['loss']['type'] == 'hinge':
+            self.discriminator = self._build_discriminator_with_SN()
+        else:
+            self.discriminator = self._build_discriminator_without_SN()
         
         self.loss_fn = self._init_loss()
         
@@ -63,12 +67,23 @@ class ConditionalGANTrainer:
         ).to(self.device)
         return generator
     
-    def _build_discriminator(self):
+    def _build_discriminator_without_SN(self):
         disc_config = self.config['model']['discriminator']
-        discriminator = ConditionalDCGANDiscriminator(
+        discriminator = ConditionalPatchGANDiscriminator(
             num_classes=disc_config['num_classes'],
             channels=disc_config['channels'],
-            dropout=disc_config['dropout']
+            dropout=disc_config['dropout'],
+            ndf= disc_config['ndf']
+        ).to(self.device)
+        return discriminator
+    
+    def _build_discriminator_with_SN(self):
+        disc_config = self.config['model']['discriminator']
+        discriminator = ConditionalPatchGANDiscriminatorSN(
+            num_classes=disc_config['num_classes'],
+            channels=disc_config['channels'],
+            dropout=disc_config['dropout'],
+            ndf= disc_config['ndf']
         ).to(self.device)
         return discriminator
     

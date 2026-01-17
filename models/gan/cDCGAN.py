@@ -49,55 +49,184 @@ class ConditionalDCGANGenerator(nn.Module):
         return x
 
 
-class ConditionalDCGANDiscriminator(nn.Module):
+class ConditionalPatchGANDiscriminatorSN(nn.Module):
+    """
+    Conditional PatchGAN Discriminator with Spectral Normalization
+    
+    PatchGAN outputs spatial logits (NxN) instead of a single value.
+    Each output corresponds to a patch's receptive field in the input.
+    Class conditioning via projection discriminator approach.
+    """
 
-    def __init__(self, num_classes=2, channels=3, width=128, height=128, dropout=0.5):
-        super(ConditionalDCGANDiscriminator, self).__init__()
+    def __init__(self, num_classes=2, ndf=64, channels=3, width=128, height=128, dropout=0.3):
+        super(ConditionalPatchGANDiscriminatorSN, self).__init__()
         
         self.num_classes = num_classes
         
-        self.class_embedding = nn.Embedding(num_classes, 512)
+        # Class embedding for projection discriminator
+        self.class_embedding = nn.Embedding(num_classes, ndf * 8)
         
+        # PatchGAN architecture with spectral normalization
+        # No BatchNorm (incompatible with SN in discriminator)
         self.conv_layers = nn.Sequential(
-            nn.Conv2d(channels, 64, kernel_size=4, stride=2, padding=1),
+            # Layer 1: 128x128 -> 64x64
+            nn.utils.spectral_norm(
+                nn.Conv2d(channels, ndf, kernel_size=4, stride=2, padding=1)
+            ),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Dropout2d(dropout),
             
-            nn.Conv2d(64, 128, kernel_size=4, stride=2, padding=1),
-            nn.BatchNorm2d(128),
+            # Layer 2: 64x64 -> 32x32
+            nn.utils.spectral_norm(
+                nn.Conv2d(ndf, ndf * 2, kernel_size=4, stride=2, padding=1)
+            ),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Dropout2d(dropout),
             
-            nn.Conv2d(128, 256, kernel_size=4, stride=2, padding=1),
-            nn.BatchNorm2d(256),
+            # Layer 3: 32x32 -> 16x16
+            nn.utils.spectral_norm(
+                nn.Conv2d(ndf * 2, ndf * 4, kernel_size=4, stride=2, padding=1)
+            ),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Dropout2d(dropout),
             
-            nn.Conv2d(256, 512, kernel_size=4, stride=2, padding=1),
-            nn.BatchNorm2d(512),
+            # Layer 4: 16x16 -> 8x8
+            nn.utils.spectral_norm(
+                nn.Conv2d(ndf * 4, ndf * 8, kernel_size=4, stride=2, padding=1)
+            ),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Dropout2d(dropout),
             
-            nn.Conv2d(512, 512, kernel_size=4, stride=2, padding=1),
-            nn.BatchNorm2d(512),
+            # Layer 5 (stride=1): 8x8 -> 8x8 (maintain spatial dims)
+            nn.utils.spectral_norm(
+                nn.Conv2d(ndf * 8, ndf * 8, kernel_size=4, stride=1, padding=1)
+            ),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Dropout2d(dropout),
         )
         
-        self.fc = nn.Sequential(
-            nn.Flatten(),
-            nn.Linear(512 * 4 * 4 + 512, 256),
-            nn.LeakyReLU(0.2, inplace=True),
-            nn.Linear(256, 1)
+        # Final projection layer for PatchGAN output
+        # Produces spatial logits (no sigmoid)
+        self.output_conv = nn.utils.spectral_norm(
+            nn.Conv2d(ndf * 8, 1, kernel_size=4, stride=1, padding=1)
         )
     
     def forward(self, x, labels):
+        """
+        Forward pass with conditional projection
+        
+        Args:
+            x: Input images [B, C, H, W]
+            labels: Class labels [B]
+        
+        Returns:
+            Patch logits [B, 1, N, N] - raw logits for Hinge Loss
+        """
+        # Extract spatial features
+        features = self.conv_layers(x)  # [B, 512, 8, 8]
+        
+        # Get spatial output
+        output = self.output_conv(features)  # [B, 1, 7, 7]
+        
+        # Conditional projection discriminator
+        # Add class information via inner product with embedding
+        class_embedding = self.class_embedding(labels)  # [B, 512]
+        class_embedding = class_embedding.view(class_embedding.size(0), -1, 1, 1)  # [B, 512, 1, 1]
+        
+        # Project features with class embedding and add to output
+        projection = torch.sum(features * class_embedding, dim=1, keepdim=True)  # [B, 1, 8, 8]
+        
+        # Interpolate projection to match output spatial size
+        if projection.size(-1) != output.size(-1):
+            projection = nn.functional.adaptive_avg_pool2d(projection, output.size()[-2:])
+        
+        output = output + projection
+        
+        return output
 
-        features = self.conv_layers(x) 
-        features = features.view(features.size(0), -1)  
+
+class ConditionalPatchGANDiscriminator(nn.Module):
+    """
+    Conditional PatchGAN Discriminator (without Spectral Normalization)
+    
+    PatchGAN outputs spatial logits (NxN) instead of a single value.
+    Each output corresponds to a patch's receptive field in the input.
+    Uses BatchNorm for stability (alternative to spectral normalization).
+    """
+
+    def __init__(self, num_classes=2, ndf=64, channels=3, width=128, height=128, dropout=0.3):
+        super(ConditionalPatchGANDiscriminator, self).__init__()
         
-        class_embedding = self.class_embedding(labels)  
+        self.num_classes = num_classes
         
-        combined = torch.cat([features, class_embedding], dim=1)
-        output = self.fc(combined) 
+        # Class embedding for projection discriminator
+        self.class_embedding = nn.Embedding(num_classes, ndf * 8)
+        
+        # PatchGAN architecture with BatchNorm
+        self.conv_layers = nn.Sequential(
+            # Layer 1: 128x128 -> 64x64 (no norm on first layer)
+            nn.Conv2d(channels, ndf, kernel_size=4, stride=2, padding=1),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Dropout2d(dropout),
+            
+            # Layer 2: 64x64 -> 32x32
+            nn.Conv2d(ndf, ndf * 2, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(ndf * 2),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Dropout2d(dropout),
+            
+            # Layer 3: 32x32 -> 16x16
+            nn.Conv2d(ndf * 2, ndf * 4, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(ndf * 4),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Dropout2d(dropout),
+            
+            # Layer 4: 16x16 -> 8x8
+            nn.Conv2d(ndf * 4, ndf * 8, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(ndf * 8),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Dropout2d(dropout),
+            
+            # Layer 5 (stride=1): 8x8 -> 8x8 (maintain spatial dims)
+            nn.Conv2d(ndf * 8, ndf * 8, kernel_size=4, stride=1, padding=1),
+            nn.BatchNorm2d(ndf * 8),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Dropout2d(dropout),
+        )
+        
+        # Final projection layer for PatchGAN output
+        # Produces spatial logits (no sigmoid)
+        self.output_conv = nn.Conv2d(ndf * 8, 1, kernel_size=4, stride=1, padding=1)
+    
+    def forward(self, x, labels):
+        """
+        Forward pass with conditional projection
+        
+        Args:
+            x: Input images [B, C, H, W]
+            labels: Class labels [B]
+        
+        Returns:
+            Patch logits [B, 1, N, N] - raw logits for Hinge Loss
+        """
+        # Extract spatial features
+        features = self.conv_layers(x)  # [B, 512, 8, 8]
+        
+        # Get spatial output
+        output = self.output_conv(features)  # [B, 1, 7, 7]
+        
+        # Conditional projection discriminator
+        # Add class information via inner product with embedding
+        class_embedding = self.class_embedding(labels)  # [B, 512]
+        class_embedding = class_embedding.view(class_embedding.size(0), -1, 1, 1)  # [B, 512, 1, 1]
+        
+        # Project features with class embedding and add to output
+        projection = torch.sum(features * class_embedding, dim=1, keepdim=True)  # [B, 1, 8, 8]
+        
+        # Interpolate projection to match output spatial size
+        if projection.size(-1) != output.size(-1):
+            projection = nn.functional.adaptive_avg_pool2d(projection, output.size()[-2:])
+        
+        output = output + projection
+        
         return output
