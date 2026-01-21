@@ -9,7 +9,7 @@ import pandas as pd
 from PIL import Image
 from pathlib import Path
 from models.classifier.classifier import Classifier
-from evaluation.metrics import evaluate, evaluate_with_threshold_tuning
+from evaluation.classifier_metrics import evaluate, evaluate_with_threshold_tuning
 from evaluation.plots import plot_train_val_stats, plot_cm
 from sklearn.metrics import accuracy_score, f1_score, confusion_matrix, roc_auc_score, precision_recall_curve, roc_curve, auc, recall_score, precision_score
 
@@ -236,7 +236,7 @@ def main(config=None):
         if recall > best_recall:
             early_stopping_count = 0
             best_recall = recall
-            best_model_accuracy = accuracy
+            best_f1 = f1
             output_dir = config.get('output_dir', 'results/baseline')
             os.makedirs(output_dir, exist_ok=True)
             model_save_path = os.path.join(output_dir, 'classifier.pth')
@@ -249,8 +249,7 @@ def main(config=None):
             break
     
     
-    print(f'Training completed. Best recall: {best_recall:.4f}')
-    print(f'Model validation accuracy: {best_model_accuracy:.4f}')
+    print(f'Training completed. \nBest recall: {best_recall:.4f}\nBest f1-score: {best_f1:.4f}')
     
     output_dir = config.get('output_dir', 'results/baseline')
     model_save_path = os.path.join(output_dir, 'classifier.pth')
@@ -288,7 +287,6 @@ def main(config=None):
         'f1': test_f1,
         'roc_auc': test_roc_auc,
         'val_loss': test_loss,
-        'best_val_accuracy': best_model_accuracy,
         'optimal_threshold': optimal_threshold
     }
 

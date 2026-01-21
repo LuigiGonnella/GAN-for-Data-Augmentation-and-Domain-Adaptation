@@ -23,8 +23,8 @@ model:
 training:
   batch_size: 64
   epochs: 300    
-  g_lr: 0.0002
-  d_lr: 0.0002   
+  g_lr: 0.0002 #lr TUNED
+  d_lr: 0.0001 #lr TUNED   
   n_critic: 1
 
 generation:

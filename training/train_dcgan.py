@@ -146,7 +146,8 @@ class GANTrainer:
             batch_size=batch_size,
             shuffle=True,
             num_workers=4,
-            pin_memory=True
+            pin_memory=True,
+            drop_last=True
         )
         
         print(f"Loaded {len(malignant_dataset)} malignant images")

@@ -7,8 +7,15 @@ import yaml
 import pandas as pd
 import random
 import os
+import copy
 
 from training.train_dcgan import GANTrainer
+from evaluation.gan_classifier_evaluation import (
+    CLASSIFIER_PATH,
+    evaluate_and_plot_classifier,
+    compute_combined_score
+)
+
 PARAM_DISTRIBUTION = {
     'betas': [(0.5, 0.999), (0, 0.9), (0.3, 0.999)],
     'batch_size': [32, 64],
@@ -32,16 +39,19 @@ LR_COMBINATIONS = [
     {'g_lr': 3e-4, 'd_lr': 3e-4},
 ]
 
-def tune_lr(lr_params, config, id):
+def tune_lr(lr_params, config, id, use_classifier=True, classifier_config=None):
     """
     Tune learning rates for generator and discriminator
     
     Args:
         lr_params: Dict with 'g_lr' and 'd_lr' keys
-        config_path: Path to base config file
+        config: Config dict
+        id: Iteration ID
+        use_classifier: Whether to evaluate with classifier
+        classifier_config: Classifier config dict or path to yaml file
     
     Returns:
-        Tuple of (fid_score, config) or None on error
+        Tuple of (fid_score, classifier_metrics, config) or None on error
     """    
     config['training']['g_lr'] = lr_params['g_lr']
     config['training']['d_lr'] = lr_params['d_lr']
@@ -55,21 +65,41 @@ def tune_lr(lr_params, config, id):
     trainer = GANTrainer(config)
     fid_score = trainer.train(n_iter=id)
     
-    return fid_score, config
+    # Evaluate with classifier if requested and path exists
+    classifier_metrics = None
+    if use_classifier and os.path.exists(CLASSIFIER_PATH):
+        generator_path = os.path.join(config['output']['checkpoint_dir'], f'final_generator_iter_{id}.pth')
+        if os.path.exists(generator_path):
+            try:
+                plot_dir = os.path.join(config['output']['metrics_dir'], 'plots')
+                classifier_metrics = evaluate_and_plot_classifier(
+                    generator_path, config, plot_dir, id, classifier_config=classifier_config
+                )
+                print(f"  Classifier metrics - Precision: {classifier_metrics['precision']:.4f}, Recall: {classifier_metrics['recall']:.4f}")
+            except Exception as e:
+                print(f"  Warning: Classifier evaluation failed: {e}")
+    
+    return fid_score, classifier_metrics, config
 
 
-def run_lr_tuning(config_path):
+def run_lr_tuning(config_path, use_classifier=True, classifier_config=None):
     """
     Test all learning rate combinations and return best configuration
     
     Args:
         config_path: Path to base config file
+        use_classifier: Whether to use classifier evaluation
+        classifier_config: Classifier config dict or path to yaml file
     
     Returns:
-        Tuple of (best_g_lr, best_d_lr) with lowest FID score
+        Tuple of (best_g_lr, best_d_lr) based on combined metrics
     """
     print("\n" + "="*60)
     print("RUNNING LEARNING RATE TUNING")
+    if use_classifier and os.path.exists(CLASSIFIER_PATH):
+        print("Using FID + Classifier Metrics for selection")
+    else:
+        print("Using FID only for selection")
     print("="*60)
     print(f"Testing {len(LR_COMBINATIONS)} learning rate combinations\n")
     
@@ -77,7 +107,7 @@ def run_lr_tuning(config_path):
         with open(config_path, 'r') as f:
             config = yaml.safe_load(f)
     except Exception as e:
-        print(f'Exception ccurred: {e}')
+        print(f'Exception occurred: {e}')
 
     results = []
     
@@ -86,11 +116,11 @@ def run_lr_tuning(config_path):
         print(f"  Generator LR: {lr_params['g_lr']:.0e}")
         print(f"  Discriminator LR: {lr_params['d_lr']:.0e}")
         
-        result = tune_lr(lr_params, config.copy(), idx)
+        result = tune_lr(lr_params, copy.deepcopy(config), idx, use_classifier, classifier_config)
         
         if result is not None:
-            fid_score, config = result
-            results.append((fid_score, lr_params['g_lr'], lr_params['d_lr']))
+            fid_score, classifier_metrics, config = result
+            results.append((fid_score, classifier_metrics, lr_params['g_lr'], lr_params['d_lr']))
             print(f"  → FID Score: {fid_score:.4f}")
         else:
             print(f"  → Failed")
@@ -99,18 +129,45 @@ def run_lr_tuning(config_path):
         print("\nError: No successful learning rate combinations found.")
         return None, None
     
-    # Sort by FID score (lower is better)
-    results.sort(key=lambda x: x[0])
-    best_fid, best_g_lr, best_d_lr = results[0]
+    # Sort by combined score: prioritize recall (if available), then FID
+    if use_classifier and results[0][1] is not None:
+        # Get all FID scores for normalization
+        fid_scores = [r[0] for r in results]
+        
+        # Calculate combined scores using the utility function
+        scored_results = []
+        for fid, clf_metrics, g_lr, d_lr in results:
+            combined_score = compute_combined_score(
+                fid, clf_metrics['recall'], fid_scores,
+                recall_weight=0.6, fid_weight=0.4
+            )
+            scored_results.append((combined_score, fid, clf_metrics, g_lr, d_lr))
+        
+        scored_results.sort(key=lambda x: x[0])
+        _, best_fid, best_clf_metrics, best_g_lr, best_d_lr = scored_results[0]
+        
+        print("\nUsing combined scoring: -0.6*recall + 0.4*normalized_fid")
+    else:
+        # Fall back to FID only
+        results.sort(key=lambda x: x[0])
+        best_fid, best_clf_metrics, best_g_lr, best_d_lr = results[0]
     
     # Save results to CSV
     results_data = []
-    for fid_score, g_lr, d_lr in results:
-        results_data.append({
+    for fid_score, clf_metrics, g_lr, d_lr in results:
+        row = {
             'fid_score': fid_score,
             'g_lr': g_lr,
             'd_lr': d_lr
-        })
+        }
+        if clf_metrics:
+            row.update({
+                'classifier_precision': clf_metrics['precision'],
+                'classifier_recall': clf_metrics['recall'],
+                'classifier_accuracy': clf_metrics['accuracy'],
+                'classifier_f1': clf_metrics['f1']
+            })
+        results_data.append(row)
     
     results_df = pd.DataFrame(results_data)
     
@@ -132,6 +189,12 @@ def run_lr_tuning(config_path):
     print(f"\nBest learning rates (FID: {best_fid:.4f}):")
     print(f"  Generator LR: {best_g_lr:.0e}")
     print(f"  Discriminator LR: {best_d_lr:.0e}")
+    if best_clf_metrics:
+        print(f"\nClassifier Performance on Generated Samples:")
+        print(f"  Recall: {best_clf_metrics['recall']:.4f}")
+        print(f"  Precision: {best_clf_metrics['precision']:.4f}")
+        print(f"  F1-Score: {best_clf_metrics['f1']:.4f}")
+        print(f"  Accuracy: {best_clf_metrics['accuracy']:.4f}")
     print("\nAll results:")
     print(results_df.to_string(index=False))
     print("="*60 + "\n")
@@ -145,7 +208,7 @@ def run_lr_tuning(config_path):
     
     return loss_type, best_g_lr, best_d_lr
 
-def tune_with_hyperparams(hyperparams, config, id):
+def tune_with_hyperparams(hyperparams, config, id, use_classifier=True, classifier_config=None):
     
     print(f"HYPERPARAMETER TUNING - ITERATION {id}")
     print(f"TESTING PARAMS: {hyperparams}")
@@ -155,6 +218,7 @@ def tune_with_hyperparams(hyperparams, config, id):
         config['model']['generator']['latent_dim'] = hyperparams['latent_dim']    
         config['model']['discriminator']['n_layers'] = hyperparams['n_layers']
         config['model']['discriminator']['dropout'] = hyperparams['dropout']
+        config['training']['batch_size'] = hyperparams['batch_size']
         config['training']['n_critic'] = hyperparams['n_critic']
         config['training']['epochs'] = CONFIG_EPOCHS
 
@@ -166,14 +230,32 @@ def tune_with_hyperparams(hyperparams, config, id):
         trainer = GANTrainer(config)
         fid_scores = trainer.train(n_iter=id)
 
-        return fid_scores, config
+        # Evaluate with classifier if requested
+        classifier_metrics = None
+        if use_classifier and os.path.exists(CLASSIFIER_PATH):
+            generator_path = os.path.join(config['output']['checkpoint_dir'], f'final_generator_iter_{id}.pth')
+            if os.path.exists(generator_path):
+                try:
+                    plot_dir = os.path.join(config['output']['metrics_dir'], 'plots')
+                    classifier_metrics = evaluate_and_plot_classifier(
+                        generator_path, config, plot_dir, id, classifier_config=classifier_config
+                    )
+                    print(f"  Classifier metrics - Precision: {classifier_metrics['precision']:.4f}, Recall: {classifier_metrics['recall']:.4f}")
+                except Exception as e:
+                    print(f"  Warning: Classifier evaluation failed: {e}")
+
+        return fid_scores, classifier_metrics, config
         
     except Exception as e:
         print(f"Error with hyperparameter {hyperparams}: {repr(e)}")
         return None
 
-def run_hyperparameter_tuning(config):
+def run_hyperparameter_tuning(config, use_classifier=True, classifier_config=None):
     print("RUNNING HYPERPARAMETER TUNING\n")
+    if use_classifier and os.path.exists(CLASSIFIER_PATH):
+        print("Using FID + Classifier Metrics for selection")
+    else:
+        print("Using FID only for selection")
     
     print(f"Total iterations of RandomSearch: {N_ITERATIONS}\n")
     
@@ -191,11 +273,12 @@ def run_hyperparameter_tuning(config):
 
         print(f"PROCESSING ITERATION {iter+1}")
     
-        fid_scores, config = tune_with_hyperparams(params, config.copy(), iter+1)
+        result = tune_with_hyperparams(params, copy.deepcopy(config), iter+1, use_classifier, classifier_config)
         
 
-        if fid_scores is not None:
-            results.append((fid_scores, config))  
+        if result is not None:
+            fid_scores, classifier_metrics, config = result
+            results.append((fid_scores, classifier_metrics, config))  
             print(f"  → FID Score: {fid_scores:.4f}")
 
 
@@ -203,11 +286,32 @@ def run_hyperparameter_tuning(config):
         print("Error: No successful hyperparameter combinations found.")
         return None, None
     
-   
-    results.sort(key=lambda x: x[0], reverse=False)
-    res, best_config = results[0]
+    # Sort by combined score if classifier metrics available
+    if use_classifier and results[0][1] is not None:
+        # Get all FID scores for normalization
+        fid_scores = [r[0] for r in results]
+        
+        # Calculate combined scores using the utility function
+        scored_results = []
+        for fid, clf_metrics, config in results:
+            combined_score = compute_combined_score(
+                fid, clf_metrics['recall'], fid_scores,
+                recall_weight=0.6, fid_weight=0.4
+            )
+            scored_results.append((combined_score, fid, clf_metrics, config))
+        
+        scored_results.sort(key=lambda x: x[0])
+        _, res, best_clf_metrics, best_config = scored_results[0]
+    else:
+        results.sort(key=lambda x: x[0], reverse=False)
+        res, best_clf_metrics, best_config = results[0]
 
     print(f"\nBest FID Score: {res:.4f}")
+    if best_clf_metrics:
+        print(f"\nClassifier Performance on Generated Samples:")
+        print(f"  Recall: {best_clf_metrics['recall']:.4f}")
+        print(f"  Precision: {best_clf_metrics['precision']:.4f}")
+        print(f"  F1-Score: {best_clf_metrics['f1']:.4f}")
     print(f"\nBest Parameters:")
     print(f"  Latent Dim: {best_config['model']['generator']['latent_dim']}")
     print(f"  N Layers: {best_config['model']['discriminator']['n_layers']}")
@@ -218,8 +322,8 @@ def run_hyperparameter_tuning(config):
     
     try:
         results_data = []
-        for idx, (fid_score, config) in enumerate(results, 1):
-            results_data.append({
+        for idx, (fid_score, clf_metrics, config) in enumerate(results, 1):
+            row = {
                 'iteration': idx,
                 'fid_score': fid_score,
                 'latent_dim': config['model']['generator']['latent_dim'],
@@ -227,7 +331,15 @@ def run_hyperparameter_tuning(config):
                 'dropout': config['model']['discriminator']['dropout'],
                 'n_critic': config['training']['n_critic'],
                 'batch_size': config['training']['batch_size']
-            })
+            }
+            if clf_metrics:
+                row.update({
+                    'classifier_precision': clf_metrics['precision'],
+                    'classifier_recall': clf_metrics['recall'],
+                    'classifier_accuracy': clf_metrics['accuracy'],
+                    'classifier_f1': clf_metrics['f1']
+                })
+            results_data.append(row)
         
         results_df = pd.DataFrame(results_data)
         results_dir = Path(best_config['output']['metrics_dir'])
@@ -240,9 +352,9 @@ def run_hyperparameter_tuning(config):
 
     print("HYPERPARAMETER TUNING COMPLETED.\n")
     
-    return best_config, res
+    return best_config
 
-def run_best_config(type, config_path, g_lr, d_lr):
+def run_best_config(type, config_path, g_lr, d_lr, use_classifier=True, classifier_config=None):
     try:
         with open(config_path, 'r') as f:
             config = yaml.safe_load(f)
@@ -250,19 +362,25 @@ def run_best_config(type, config_path, g_lr, d_lr):
         print(f'Exception occurred: {e}')
 
     config['loss']['type'] = type
-    config['output']['sample_dir'] += f'{type}_ht'
-    config['output']['metrics_dir'] += f'{type}_ht'
-    config['output']['checkpoint_dir'] += f'_{type}_ht'
+    
+    # Append _ht suffix to output directories if not already present
+    if not config['output']['sample_dir'].endswith('_ht'):
+        config['output']['sample_dir'] += '_ht'
+    if not config['output']['metrics_dir'].endswith('_ht'):
+        config['output']['metrics_dir'] += '_ht'
+    if not config['output']['checkpoint_dir'].endswith('_ht'):
+        config['output']['checkpoint_dir'] += '_ht'
+    
     config['training']['g_lr'] = g_lr
     config['training']['d_lr'] = d_lr
 
-    best_config, best_fid = run_hyperparameter_tuning(config)
+    best_config = run_hyperparameter_tuning(config, use_classifier=use_classifier, classifier_config=classifier_config)
 
     if best_config is None:
         print("Error: Could not run hyperparameter tuning")
         return
     
-    print(f'\nBEST CONFIG FID: {best_fid:.4f}')
+    print(f'\nBEST CONFIG: {best_config}')
 
     best_config['training']['epochs'] = 300
 
@@ -287,7 +405,29 @@ def run_best_config(type, config_path, g_lr, d_lr):
     trainer = GANTrainer(best_config)
     fid = trainer.train()
     
-    print(f"Final FID Score: {fid:.4f}")
+    # Evaluate final generator with classifier
+    if use_classifier and os.path.exists(CLASSIFIER_PATH):
+        generator_path = os.path.join(best_config['output']['checkpoint_dir'], 'final_generator.pth')
+        if os.path.exists(generator_path):
+            try:
+                print("\n" + "="*60)
+                print("EVALUATING FINAL GENERATOR WITH CLASSIFIER")
+                print("="*60)
+                plot_dir = os.path.join(best_config['output']['metrics_dir'], 'plots')
+                classifier_metrics = evaluate_and_plot_classifier(
+                    generator_path, best_config, plot_dir, 'final',
+                    classifier_config=classifier_config
+                )
+                print(f"\nFinal Generator - Classifier Performance:")
+                print(f"  Recall:    {classifier_metrics['recall']:.4f}")
+                print(f"  Precision: {classifier_metrics['precision']:.4f}")
+                print(f"  F1-Score:  {classifier_metrics['f1']:.4f}")
+                print(f"  Accuracy:  {classifier_metrics['accuracy']:.4f}")
+                print("="*60)
+            except Exception as e:
+                print(f"\nWarning: Final classifier evaluation failed: {e}")
+    
+    print(f"\nFinal FID Score: {fid:.4f}")
     print(f"Results saved to: {best_config['output']['sample_dir']}")
 
 if __name__ == '__main__':
@@ -310,7 +450,24 @@ if __name__ == '__main__':
         action='store_true',
         help='Skip learning rate tuning and use learning rates from config file'
     )
+    parser.add_argument(
+        '--no_classifier',
+        action='store_true',
+        help='Disable classifier-based evaluation (use FID only)'
+    )
+    parser.add_argument(
+        '--classifier_config',
+        type=str,
+        default=None,
+        help='Path to classifier config YAML file (defaults to built-in config)'
+    )
     args = parser.parse_args()
+    
+    # Check if classifier is available
+    use_classifier = not args.no_classifier and os.path.exists(CLASSIFIER_PATH)
+    if not args.no_classifier and not os.path.exists(CLASSIFIER_PATH):
+        print(f"Warning: Classifier not found at {CLASSIFIER_PATH}")
+        print("Falling back to FID-only evaluation")
 
     if args.not_lr:
         # Skip LR tuning, use values from config
@@ -325,7 +482,7 @@ if __name__ == '__main__':
             print(f'Error reading config: {e}')
             sys.exit(1)
     else:
-        type, g_lr, d_lr = run_lr_tuning(args.config)
+        type, g_lr, d_lr = run_lr_tuning(args.config, use_classifier=use_classifier, classifier_config=args.classifier_config)
 
         if g_lr is None:
             print("Error: Learning rate tuning failed")
@@ -336,8 +493,6 @@ if __name__ == '__main__':
             print("Learning rate tuning completed. Exiting (--only_lr flag set).")
             print("="*60)
             sys.exit(0)
-
-    config_path = 'experiments/dcgan_ht.yaml'
     
-    results = run_best_config(type, config_path, g_lr, d_lr)
+    results = run_best_config(type, args.config, g_lr, d_lr, use_classifier=use_classifier, classifier_config=args.classifier_config)
     
