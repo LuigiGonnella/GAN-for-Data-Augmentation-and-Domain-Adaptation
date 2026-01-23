@@ -162,7 +162,6 @@ def main(config=None):
     
     criterion = nn.CrossEntropyLoss()
 
-    best_model_accuracy = 0.0
     best_recall = 0.0
 
     patience = 3

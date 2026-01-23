@@ -1,33 +1,33 @@
 FINAL OPTIMIZATION REPORT
 STEP 0: BASELINE TRAINING (freeze)
-  - Accuracy: 0.8030
-  - Precision: 0.2629
-  - Recall: 0.6467
-  - F1-Score: 0.3738
-  - ROC-AUC: 0.8236
-  - Val Loss: 0.2493
+  - Accuracy: 0.8694
+  - Precision: 0.4582
+  - Recall: 0.6033
+  - F1-Score: 0.5209
+  - ROC-AUC: 0.8761
+  - Val Loss: 0.2549
 
 STEP 1: FINE-TUNING
 Final Metrics:
-  - Accuracy: 0.7206
-  - Precision: 0.2188
-  - Recall: 0.8067
-  - F1-Score: 0.3442
-  - ROC-AUC: 0.8353
-  - Val Loss: 0.4959
+  - Accuracy: 0.9125
+  - Precision: 0.6323
+  - Recall: 0.6133
+  - F1-Score: 0.6227
+  - ROC-AUC: 0.9207
+  - Val Loss: 0.3749
 
 STEP 2: HYPERPARAMETER TUNING
 Best hyperparameter configuration:
-weight_decay         0.0001
-batch_size              128
-lr                      0.1
-momentum               0.95
-optimizer           RMSprop
-accuracy            0.53697
-recall             0.986667
-precision          0.162637
-f1                 0.279245
-roc_auc             0.73932
-val_loss        3681.817855
-Name: 8, dtype: object
+weight_decay     0.00001
+batch_size            64
+lr                 0.001
+momentum             0.8
+optimizer          AdamW
+accuracy        0.875294
+recall          0.756667
+precision       0.480932
+f1              0.588083
+roc_auc         0.920471
+val_loss        0.370921
+Name: 2, dtype: object
 Final Metrics:

@@ -17,9 +17,7 @@ from evaluation.gan_classifier_evaluation import (
 )
 
 PARAM_DISTRIBUTION = {
-    'betas': [(0.5, 0.999), (0, 0.9), (0.3, 0.999)],
     'batch_size': [32, 64],
-    'optimizer': ['Adam', 'AdamW'],
     'latent_dim': [100, 128, 256],
     'n_layers': [2, 3],
     'dropout': [0.1, 0.3],

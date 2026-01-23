@@ -1,0 +1,18 @@
+experiment_name: augmented_ft_ht
+
+data_path: "data/processed/augmented"
+
+
+model:
+  name: resnet50
+  pretrained: true
+
+training: #hyperparameter-tuning with random search
+  ht: true
+  layers: 2
+  params:
+    epochs: 3 #epochs for hyperparameter tuning, not for final training
+
+best_config_run: false
+
+output_dir: results/classifier_on_augmented/ft_ht

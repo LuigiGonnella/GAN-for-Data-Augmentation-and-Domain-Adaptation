@@ -1,0 +1,19 @@
+experiment_name: augmented_freeze
+
+data_path: "data/processed/augmented"
+
+model:
+  name: resnet50
+  pretrained: true
+
+training:
+  ht: false
+  layers: false
+  params:
+    epochs: 10
+    batch_size: 64
+    lr: 0.001
+  
+best_config_run: false #use in hyperparameter tuning
+
+output_dir: results/classifier_on_augmented/freeze

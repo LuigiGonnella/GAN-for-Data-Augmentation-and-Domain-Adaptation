@@ -11,8 +11,8 @@ training: #hyperparameter-tuning with random search
   ht: true
   layers: 2
   params:
-    epochs: 5 #epochs for hyperparameter tuning, not for final training
+    epochs: 3 #epochs for hyperparameter tuning, not for final training
 
 best_config_run: false
 
-output_dir: results/baseline/ft_ht
+output_dir: results/classifier_on_baseline/ft_ht

@@ -12,9 +12,9 @@ training: #no hyperparameter-tuning
   layers: 2
   params:
     epochs: 10
-    batch_size: 32
+    batch_size: 64
     lr: 0.001
   
 best_config_run: false #use in hyperparameter tuning
 
-output_dir: results/baseline/ft
+output_dir: results/classifier_on_baseline/ft

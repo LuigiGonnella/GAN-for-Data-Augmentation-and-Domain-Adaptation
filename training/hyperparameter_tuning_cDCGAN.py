@@ -7,6 +7,7 @@ import yaml
 import pandas as pd
 import random
 import os
+import copy
 
 from training.train_cdcgan import ConditionalGANTrainer
 from evaluation.gan_classifier_evaluation import (
@@ -16,7 +17,6 @@ from evaluation.gan_classifier_evaluation import (
 )
 
 PARAM_DISTRIBUTION = {
-    'betas': [(0.5, 0.999), (0, 0.9), (0.3, 0.999)],
     'batch_size': [32, 64],
     'latent_dim': [100, 128, 256],
     'n_layers': [2, 3, 4],
@@ -117,7 +117,7 @@ def run_lr_tuning(config_path, use_classifier=True, classifier_config=None):
         print(f"  Generator LR: {lr_params['g_lr']:.0e}")
         print(f"  Discriminator LR: {lr_params['d_lr']:.0e}")
         
-        result = tune_lr(lr_params, config.copy(), idx, use_classifier, classifier_config)
+        result = tune_lr(lr_params, copy.deepcopy(config), idx, use_classifier, classifier_config)
         
         if result is not None:
             fid_score, classifier_metrics, config = result
@@ -298,7 +298,7 @@ def run_hyperparameter_tuning(config, use_classifier=True, classifier_config=Non
 
         print(f"\nPROCESSING ITERATION {iter+1}/{N_ITERATIONS}")
     
-        result = tune_with_hyperparams(params, config.copy(), iter+1, use_classifier, classifier_config)
+        result = tune_with_hyperparams(params, copy.deepcopy(config), iter+1, use_classifier, classifier_config)
         
         if result is not None:
             fid_score, classifier_metrics, tuned_config = result

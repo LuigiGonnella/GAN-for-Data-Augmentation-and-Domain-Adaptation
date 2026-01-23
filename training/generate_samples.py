@@ -15,7 +15,7 @@ from tqdm import tqdm
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from models.gan.DCGAN import DCGANGenerator
-from models.gan.utils import load_config
+from config.utils import load_config
 
 class ImageGenerator:
     def __init__(self, generator_path, config, device):

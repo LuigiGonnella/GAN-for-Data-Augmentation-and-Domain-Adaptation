@@ -2,28 +2,30 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from train_classifier import main as train_main
 from finetune_classifier import run_fine_tuning
-from hyperparameter_tuning import run_hyperparameter_tuning
-from training.baseline_training_classifier import run_baseline
+from hyperparameter_tuning_classifier import run_hyperparameter_tuning
+from training.freeze_classifier import run_baseline
 import yaml
 import json
 from datetime import datetime
 import os
+from config.utils import load_config
+import argparse
 
-def run_full_pipeline(mode):
+def run_full_pipeline(mode, data_type):
     
     # STEP 0: Freezing
     print("# STEP 0: Baseline Training (freeze)")
 
-    baseline_metrics = run_baseline()
+    baseline_metrics = run_baseline(f"experiments/classifier_{data_type}_freeze.yaml")
     
     print(f"\n✓ Baseline completed.\nResults:{baseline_metrics}")
 
     # STEP 1: Fine-Tuning 
     print("# STEP 1: Fine-Tuning")
+
     
-    finetune_results = run_fine_tuning()
+    finetune_results = run_fine_tuning(f"experiments/classifier_{data_type}_ft.yaml")
     
     print(f"\n✓ Fine-tuning completed.\nResults:{finetune_results}")
     
@@ -31,7 +33,7 @@ def run_full_pipeline(mode):
         # STEP 2: Fine-Tuning and Hyperparameter Tuning 
         print("# STEP 2: Hyperparameter Tuning with Best Strategy")
         
-        best_config, tuning_results = run_hyperparameter_tuning()
+        best_config, tuning_results = run_hyperparameter_tuning(f"experiments/classifier_{data_type}_ft_ht.yaml")
         
         print(f"✓ Hyperparameter tuning completed.\nResults:{tuning_results}\n")
         print(f'BEST CONFIGURATION:/n{best_config}')
@@ -41,7 +43,7 @@ def run_full_pipeline(mode):
     # STEP 3: Final Report
     print("# STEP 3: Final Report")
     
-    generate_final_report(baseline_metrics, finetune_results, tuning_results, best_config)
+    generate_final_report(baseline_metrics, finetune_results, tuning_results, best_config, data_type)
     
     print("PIPELINE COMPLETED SUCCESSFULLY!")
     print(f"End time: {datetime.now()}")
@@ -49,9 +51,9 @@ def run_full_pipeline(mode):
 
 
 FINAL_METRICS = "Final Metrics:\n"
-def generate_final_report(baseline_metrics, finetune_results, tuning_results, best_config):
+def generate_final_report(baseline_metrics, finetune_results, tuning_results, best_config, data_type):
     # --- Generate improved image report with graphs and schemas ---
-    report_dir = "results/baseline/final_report"
+    report_dir = f"results/classifier_on_{data_type}/final_report"
     os.makedirs(report_dir, exist_ok=True)
     try:
         import matplotlib.pyplot as plt
@@ -237,37 +239,38 @@ def generate_final_report(baseline_metrics, finetune_results, tuning_results, be
             json.dump(summary, f, indent=2)
         print(f"Config saved: {summary_path}")
 
-def validate_input():
-        if len(sys.argv) == 2 and sys.argv[1].lower() == 'help':
-            print("""
-    Usage: python pipeline.py [mode]\n
-    You can run this file in two ways:
-    1. With no arguments: default behavior (ht)
-    2. With one argument 'no_ht': disables hyperparameter tuning
-    Example:
-        python pipeline.py           # runs with hyperparameter tuning (ht)
-        python pipeline.py no_ht     # runs without hyperparameter tuning
-    """)
-            sys.exit(0)
-        if len(sys.argv) == 1:
-            return 'ht'  # default mode
-        if len(sys.argv) == 2:
-            mode = sys.argv[1]
-            if mode != 'no_ht':
-                print(f"Error: Invalid argument '{mode}'. Only 'no_ht' is allowed. Use 'help' for usage.")
-                sys.exit(1)
-            return mode
-        print("Error: Too many arguments. Use 'help' for usage.")
-        sys.exit(1)
+
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(
+        description='FULL CLASSIFIER PIPELINE'
+    )
+    parser.add_argument(
+        '--data_type', 
+        type=str, 
+        required=True,
+        help='Data type to train the classifier on'
+    )
+
+    parser.add_argument(
+        '--no_ht',
+        help='Run hyperparameter tuning and finetuning'
+    )
+
+    args = parser.parse_args()
+
+    # Validate data_type argument
+    if args.data_type not in ['baseline', 'augmented']:
+        parser.error(f"Invalid data_type '{args.data_type}'. Must be either 'baseline' or 'augmented'.")
 
     #take as argument 'no_ht' or nothing
-    mode = validate_input()
+    mode = 'no_ht' if args.no_ht else 'ht'
 
-    print(f'RUNNING PIPELINE WITH MODE: {mode}\n')
+    data_type = args.data_type
+
+    print(f'RUNNING PIPELINE WITH MODE: {mode} and DATA TYPE: {data_type}\n')
     
-    run_full_pipeline(mode)
+    run_full_pipeline(mode, data_type)
     
     
 
