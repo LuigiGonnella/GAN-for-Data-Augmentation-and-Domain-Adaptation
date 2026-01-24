@@ -15,7 +15,7 @@ data/processed/augmented/train/benign/**.png
 data/processed/augmented/train/malignant/**.png
 data/processed/augmented/val/**.png
 
-
+generation/
 
 __pycache__/
 *.pyc

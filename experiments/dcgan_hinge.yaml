@@ -30,7 +30,7 @@ training:
 generation:
   batch_size: 64
   num_samples: 3000
-  checkpoint: "results/checkpoints/dcgan_hinge/final_generator.pth"
+  checkpoint: "results/checkpoints/dcgan_hinge_final/final_generator.pth"
   sample_dir: "data/synthetic/dcgan_hinge/generation"
   preview_dir: "data/synthetic/dcgan_hinge"
 

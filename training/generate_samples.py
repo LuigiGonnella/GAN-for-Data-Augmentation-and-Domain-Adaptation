@@ -1,6 +1,5 @@
 """
 Generate large batches of synthetic images from trained GAN
-Usage: python generate_samples.py --checkpoint path/to/generator.pth --num_samples 5000 --output_dir data/synthetic/gan_v1/malignant
 """
 
 import torch
@@ -101,7 +100,7 @@ class ImageGenerator:
             
             # Save individual images
             for img in images:
-                filename = f"{prefix}_{image_idx:06d}.png"
+                filename = f"{prefix}_{image_idx:06d}.jpg"
                 save_image(img, output_dir / filename)
                 image_idx += 1
             
@@ -175,8 +174,8 @@ def main():
     
     # Generate preview if requested
     if args.preview or args.preview_only:
-        output_dir = config['generation']['sample_dir']
-        preview_dir = config['generation']['preview_dir']
+        output_dir = Path(config['generation']['sample_dir'])
+        preview_dir = Path(config['generation']['preview_dir'])
         output_dir.mkdir(parents=True, exist_ok=True)
         preview_path = preview_dir / "preview_grid.png"
         generator.generate_preview_grid(
@@ -191,10 +190,13 @@ def main():
         print("\nPreview generated. Continuing with bulk generation...")
         input("Press Enter to continue or Ctrl+C to cancel...")
     
+    num_samples = config['generation']['num_samples']
+    output_dir = config['generation']['sample_dir']
+    
     # Generate bulk images
     generator.generate_and_save(
-        num_samples=config['generation']['num_samples'],
-        output_dir=config['generation']['sample_dir'],
+        num_samples=num_samples,
+        output_dir=output_dir,
         batch_size=config['generation']['batch_size'],
         prefix='synthetic_malignant'
     )
@@ -202,8 +204,8 @@ def main():
     print("\n" + "="*60)
     print("Generation complete!")
     print("="*60)
-    print(f"Total images generated: {args.num_samples}")
-    print(f"Location: {args.output_dir}")
+    print(f"Total images generated: {num_samples}")
+    print(f"Location: {output_dir}")
     print("\nNext steps:")
     print("1. Inspect generated images for quality")
     print("2. Combine with real malignant images for training")
