@@ -1,0 +1,1 @@
+manually selected the parameters present in experiments/cdcgan_hinge.yaml from visual check and FID score after hyperparameter tuning
