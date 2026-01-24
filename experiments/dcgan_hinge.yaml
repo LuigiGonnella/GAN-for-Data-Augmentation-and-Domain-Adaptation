@@ -1,7 +1,7 @@
 model:
   type: "dcgan"
   generator:
-    latent_dim: 100
+    latent_dim: 256 #TUNED
     n1: 512
     channels: 3
     width: 128
@@ -11,8 +11,8 @@ model:
     ndf: 64
     width: 128
     height: 128
-    n_layers: 3    # For 128×128 images → 14×14 output
-    dropout: 0.1   
+    n_layers: 3  #TUNED  # For 128×128 images → 14×14 output
+    dropout: 0.3  #TUNED 
     
 #PATCHGAN LAYERS DETERMINE PATCHES according to the following scheme:
 #n_layers	Output_Size	Receptive_Field	Patch_Coverage
@@ -21,11 +21,11 @@ model:
 #   5	         2×2	    ~Full image	    Similar to DCGAN
 
 training:
-  batch_size: 64
+  batch_size: 32 #TUNED
   epochs: 300    
   g_lr: 0.0002 #lr TUNED
   d_lr: 0.0001 #lr TUNED   
-  n_critic: 1
+  n_critic: 2 #TUNED
 
 generation:
   batch_size: 64
