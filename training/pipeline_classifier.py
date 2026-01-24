@@ -3,7 +3,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from finetune_classifier import run_fine_tuning
-from hyperparameter_tuning_classifier import run_hyperparameter_tuning
+from hyperparameter_tuning_classifier import run_best_config
 from training.freeze_classifier import run_baseline
 import yaml
 import json
@@ -33,10 +33,10 @@ def run_full_pipeline(mode, data_type):
         # STEP 2: Fine-Tuning and Hyperparameter Tuning 
         print("# STEP 2: Hyperparameter Tuning with Best Strategy")
         
-        best_config, tuning_results = run_hyperparameter_tuning(f"experiments/classifier_{data_type}_ft_ht.yaml")
+        best_config, tuning_results = run_best_config(f"experiments/classifier_{data_type}_ft_ht.yaml")
         
-        print(f"✓ Hyperparameter tuning completed.\nResults:{tuning_results}\n")
-        print(f'BEST CONFIGURATION:/n{best_config}')
+        print(f"✓ Hyperparameter tuning completed.\nFinal test metrics: {tuning_results}\n")
+        print(f'BEST CONFIGURATION:\n{best_config}')
     else:
         best_config, tuning_results = False, False
     

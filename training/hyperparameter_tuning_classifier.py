@@ -139,10 +139,10 @@ def run_best_config(config_path):
         metrics = train_main(config)
         
         print("FINETUNING WITH HYPERPARAMETER TUNING TRAINING COMPLETED")
-        return metrics
+        return best_config, metrics
     except Exception as e:
         print(f'Error with file name experiments/classifier_baseline_ft_ht.yaml: {e}')
-        return None
+        return None, None
 
 
 if __name__ == '__main__':
@@ -157,6 +157,7 @@ if __name__ == '__main__':
     )
     args = parser.parse_args()
     
-    results = run_best_config(args.config)
-    print(results)
+    best_config, results = run_best_config(args.config)
+    print(f'\nBEST CONFIG: {best_config}\n')
+    print(f'METRICS: {results}\n')
     
