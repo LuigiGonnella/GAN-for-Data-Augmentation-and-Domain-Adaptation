@@ -14,6 +14,7 @@ from tqdm import tqdm
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from models.gan.DCGAN import DCGANGenerator
+from models.gan.cDCGAN import ConditionalDCGANGenerator
 from config.utils import load_config
 
 class ImageGenerator:
@@ -32,13 +33,25 @@ class ImageGenerator:
         # Load config
         self.config = config
         
-        # Build generator
+        # Build generator based on type
         gen_config = self.config['model']['generator']
-        self.generator = DCGANGenerator(
-            input_dim=gen_config['latent_dim'],
-            n1=gen_config['n1'],
-            channels=gen_config['channels']
-        ).to(self.device)
+        model_type = self.config['model'].get('type', 'dcgan')  # Default to DCGAN if not specified
+        
+        if model_type == 'cdcgan':
+            self.generator = ConditionalDCGANGenerator(
+                input_dim=gen_config['latent_dim'],
+                num_classes=gen_config.get('num_classes', 2),
+                n1=gen_config['n1'],
+                channels=gen_config['channels']
+            ).to(self.device)
+            self.is_conditional = True
+        else:  # DCGAN
+            self.generator = DCGANGenerator(
+                input_dim=gen_config['latent_dim'],
+                n1=gen_config['n1'],
+                channels=gen_config['channels']
+            ).to(self.device)
+            self.is_conditional = False
         
         # Load trained weights
         checkpoint = torch.load(generator_path, map_location=self.device)
@@ -53,25 +66,32 @@ class ImageGenerator:
         print(f"Generator loaded from: {generator_path}")
         print(f"Latent dimension: {self.latent_dim}")
     
-    def generate_batch(self, batch_size=64):
+    def generate_batch(self, batch_size=64, label=1):
         """
         Generate a batch of images
         
         Args:
             batch_size: Number of images to generate
+            label: Class label for conditional GAN (default 1 for malignant)
             
         Returns:
             Tensor of images [B, C, H, W] in range [0, 1]
         """
         with torch.no_grad():
             z = torch.randn(batch_size, self.latent_dim, device=self.device)
-            images = self.generator(z)
+            
+            if self.is_conditional:
+                labels = torch.full((batch_size,), label, dtype=torch.long, device=self.device)
+                images = self.generator(z, labels)
+            else:
+                images = self.generator(z)
+            
             # Convert from [-1, 1] to [0, 1]
             images = (images + 1) / 2
             images = torch.clamp(images, 0, 1)
         return images
     
-    def generate_and_save(self, num_samples, output_dir, batch_size=64, prefix='synthetic_malignant'):
+    def generate_and_save(self, num_samples, output_dir, batch_size=64, prefix='synthetic_malignant', label=1):
         """
         Generate and save individual images to disk
         
@@ -80,6 +100,7 @@ class ImageGenerator:
             output_dir: Directory to save images
             batch_size: Batch size for generation (larger = faster but more memory)
             prefix: Prefix for image filenames
+            label: Class label for conditional GAN (default 1 for malignant)
         """
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -87,6 +108,8 @@ class ImageGenerator:
         print(f"\nGenerating {num_samples} images...")
         print(f"Output directory: {output_dir}")
         print(f"Batch size: {batch_size}")
+        if self.is_conditional:
+            print(f"Label: {label} ({'malignant' if label == 1 else 'benign'})")
         
         num_batches = (num_samples + batch_size - 1) // batch_size
         image_idx = 0
@@ -96,7 +119,7 @@ class ImageGenerator:
             current_batch_size = min(batch_size, num_samples - image_idx)
             
             # Generate batch
-            images = self.generate_batch(current_batch_size)
+            images = self.generate_batch(current_batch_size, label=label)
             
             # Save individual images
             for img in images:

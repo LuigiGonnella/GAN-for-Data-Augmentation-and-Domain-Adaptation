@@ -94,7 +94,7 @@ def generate_final_report(baseline_metrics, finetune_results, tuning_results, be
         ax2.axis('off')
         if best_config is not False:
             hp_table = [
-                ['Learning Rate', best_config['learning_rate']],
+                ['Learning Rate', best_config['lr']],
                 ['Batch Size', best_config['batch_size']],
                 ['Weight Decay', best_config['weight_decay']],
                 ['Optimizer', best_config['optimizer']]
@@ -200,7 +200,7 @@ def generate_final_report(baseline_metrics, finetune_results, tuning_results, be
 
         if best_config is not False:
             f.write("Best hyperparameter configuration:\n")
-            f.write(f"  - Learning Rate: {best_config['learning_rate']}\n")
+            f.write(f"  - Learning Rate: {best_config['lr']}\n")
             f.write(f"  - Batch Size: {best_config['batch_size']}\n")
             f.write(f"  - Weight Decay: {best_config['weight_decay']}\n")
             f.write(f"  - Momentum: {best_config['momentum']}\n")
@@ -220,7 +220,7 @@ def generate_final_report(baseline_metrics, finetune_results, tuning_results, be
         summary_path = os.path.join(report_dir, "best_config.json")
         summary = {
             'best_hyperparameters': {
-                'learning_rate': float(best_config['learning_rate']),
+                'learning_rate': float(best_config['lr']),
                 'batch_size': int(best_config['batch_size']),
                 'weight_decay': float(best_config['weight_decay']),
                 'momentum': float(best_config['momentum']),

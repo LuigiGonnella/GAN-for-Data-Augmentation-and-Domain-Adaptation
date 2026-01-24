@@ -91,7 +91,7 @@ def train_classifier_with_domain_shift_eval(
     num_epochs = config['training']['num_epochs']
     
     best_val_acc = 0
-    patience = config['training'].get('early_stopping_patience', 10)
+    patience = config['training'].get('early_stopping_patience', 3)
     patience_counter = 0
     
     for epoch in range(num_epochs):

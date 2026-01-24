@@ -129,7 +129,7 @@ def run_best_config(config_path):
     print("FINETUNING WITH HYPERPARAMETER TUNING TRAINING - BEST CONFIGURATION TRAINING")
 
     try:
-        with open('experiments/classifier_baseline_ft_ht.yaml', 'r') as f:
+        with open(config_path, 'r') as f:
             config = yaml.safe_load(f)
 
         config['training']['params']['epochs'] = BEST_CONFIG_EPOCHS
@@ -141,7 +141,7 @@ def run_best_config(config_path):
         print("FINETUNING WITH HYPERPARAMETER TUNING TRAINING COMPLETED")
         return best_config, metrics
     except Exception as e:
-        print(f'Error with file name experiments/classifier_baseline_ft_ht.yaml: {e}')
+        print(f'Error with file name {config_path}: {e}')
         return None, None
 
 
