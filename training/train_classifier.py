@@ -68,7 +68,20 @@ def preprocess(config):
     if not isinstance(config, dict):
         return print('Please provide a correct training configuration')
 
-    transform = transforms.Compose([
+    # Training transforms with data augmentation to prevent overfitting
+    train_transform = transforms.Compose([
+        transforms.Resize((256, 256)),  # Resize larger for random crop
+        transforms.RandomResizedCrop(224, scale=(0.9, 1.0)),  # Conservative crop preserving lesion boundaries
+        transforms.RandomHorizontalFlip(p=0.5),
+        transforms.RandomVerticalFlip(p=0.5),
+        transforms.RandomRotation(degrees=20),
+        transforms.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0.05),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    ])
+
+    # Validation/test transforms without augmentation
+    val_transform = transforms.Compose([
         transforms.Resize((224, 224)),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
@@ -77,10 +90,10 @@ def preprocess(config):
     data_path = config.get('data_path', 'data/processed/baseline')
     
     train_csv = os.path.join(data_path, 'train', 'train.csv')
-    train_dataset = DatasetCSV(os.path.join(data_path, 'train'), train_csv, transform=transform, has_subdirs=True)
+    train_dataset = DatasetCSV(os.path.join(data_path, 'train'), train_csv, transform=train_transform, has_subdirs=True)
     
     val_csv = os.path.join(data_path, 'val', 'val.csv')
-    val_dataset = DatasetCSV(os.path.join(data_path, 'val'), val_csv, transform=transform)
+    val_dataset = DatasetCSV(os.path.join(data_path, 'val'), val_csv, transform=val_transform)
 
     train_loader = DataLoader(train_dataset, batch_size=config['training']['params']['batch_size'], shuffle=True, num_workers=0)
     val_loader = DataLoader(val_dataset, batch_size=config['training']['params']['batch_size'], shuffle=False, num_workers=0)
