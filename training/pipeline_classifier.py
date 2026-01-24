@@ -65,28 +65,29 @@ def generate_final_report(baseline_metrics, finetune_results, tuning_results, be
         values = [
             [baseline_metrics['accuracy'], baseline_metrics['precision'], baseline_metrics['recall'], baseline_metrics['f1'], baseline_metrics['roc_auc'], baseline_metrics['val_loss']],
             [finetune_results['accuracy'], finetune_results['precision'], finetune_results['recall'], finetune_results['f1'], finetune_results['roc_auc'], finetune_results['val_loss']],
-            [tuning_results['accuracy'], tuning_results['precision'], tuning_results['recall'], tuning_results['f1'], tuning_results['roc_auc'], tuning_results['val_loss']] if (tuning_results and best_config) is not False else None
+            [tuning_results['accuracy'], tuning_results['precision'], tuning_results['recall'], tuning_results['f1'], tuning_results['roc_auc'], tuning_results['val_loss']] if tuning_results is not False and best_config is not False else None
         ]
 
         df = pd.DataFrame([x for x in values if x is not None], columns=metrics, index=[s for s, v in zip(steps, values) if v is not None])
         
-        # Set up figure
-        fig = plt.figure(constrained_layout=True, figsize=(14, 10))
-        gs = fig.add_gridspec(3, 2)
+        # Set up figure with optimized spacing
+        fig = plt.figure(figsize=(12, 7))
+        gs = fig.add_gridspec(3, 2, hspace=0.35, wspace=0.3, top=0.93, bottom=0.05, left=0.08, right=0.97)
 
         # Title
         ax_title = fig.add_subplot(gs[0, :])
         ax_title.axis('off')
-        ax_title.set_title('FINAL OPTIMIZATION REPORT', fontsize=22, fontweight='bold', pad=20)
+        ax_title.set_title('FINAL OPTIMIZATION REPORT', fontsize=18, fontweight='bold', pad=5)
 
         # Bar chart for metrics
         ax1 = fig.add_subplot(gs[1, 0])
         df_plot = df.drop('val_loss', axis=1)
         df_plot.plot(kind='bar', ax=ax1)
-        ax1.set_ylabel('Score')
-        ax1.set_title('Model Performance Metrics')
-        ax1.legend(loc='lower right')
-        ax1.set_xticklabels(df_plot.index, rotation=0)
+        ax1.set_ylabel('Score', fontsize=10)
+        ax1.set_title('Model Performance Metrics', fontsize=12, pad=8)
+        ax1.legend(loc='upper left', fontsize=9, bbox_to_anchor=(1.02, 1), framealpha=0.9)
+        ax1.set_xticklabels(df_plot.index, rotation=0, fontsize=10)
+        ax1.tick_params(axis='y', labelsize=9)
 
         # Table for best hyperparameters or message if not performed
         ax2 = fig.add_subplot(gs[2, 0])
@@ -100,14 +101,15 @@ def generate_final_report(baseline_metrics, finetune_results, tuning_results, be
             ]
             table = ax2.table(cellText=hp_table, colLabels=['Hyperparameter', 'Value'], loc='center', cellLoc='center')
             table.auto_set_font_size(False)
-            table.set_fontsize(12)
-            table.scale(1.2, 1.2)
+            table.set_fontsize(10)
+            table.scale(1, 1.5)
+            ax2.set_title('Best Hyperparameter Configuration', fontsize=12, pad=8)
         else:
-            ax2.text(0.5, 0.5, 'No Hyperparameter Tuning performed', fontsize=14, ha='center', va='center')
-            ax2.set_title('Best Hyperparameter Configuration', fontsize=14, pad=10)
+            ax2.text(0.5, 0.5, 'No Hyperparameter Tuning performed', fontsize=11, ha='center', va='center')
+            ax2.set_title('Best Hyperparameter Configuration', fontsize=12, pad=8)
         
-        # Improvement summary
-        ax3 = fig.add_subplot(gs[2, 1])
+        # Improvement summary - spans rows 1 and 2 in column 1
+        ax3 = fig.add_subplot(gs[1:, 1])
         ax3.axis('off')
         improvement_finetune_f1 = (finetune_results['f1'] - baseline_metrics['f1']) / baseline_metrics['f1'] * 100
         improvement_final_f1 = (tuning_results['f1'] - baseline_metrics['f1']) / baseline_metrics['f1'] * 100 if tuning_results else None
@@ -124,21 +126,19 @@ def generate_final_report(baseline_metrics, finetune_results, tuning_results, be
             summary_text_f1 += f"- Hyperparam Tuned: {tuning_results['f1']:.4f} ({improvement_final_f1:+.2f}%)\n\n"
         else:
             summary_text_f1 += "- Hyperparam Tuned: No Hyperparameter Tuning performed\n\n"
-        ax3.text(0, 1, summary_text_f1, fontsize=12, va='top', ha='left', wrap=True)
+        ax3.text(0, 0.95, summary_text_f1, fontsize=11, va='top', ha='left', wrap=True)
 
-        # Add recall improvement summary in ax4, same style as ax3
-        ax4 = fig.add_subplot(gs[3, :]) if hasattr(gs, '__getitem__') and gs.get_geometry()[0] > 3 else fig.add_subplot(111)
-        ax4.axis('off')
+        # Add recall improvement summary in the same subplot
         summary_text_recall = (
             f"Recall Improvement:\n"
             f"- Baseline: {baseline_metrics['recall']:.4f}\n"
             f"- Fine-tuned: {finetune_results['recall']:.4f} ({improvement_finetune_recall:+.2f}%)\n"
         )
         if tuning_results:
-            summary_text_recall += f"- Hyperparam Tuned: {tuning_results['recall']:.4f} ({improvement_final_recall:+.2f}%)\n\n"
+            summary_text_recall += f"- Hyperparam Tuned: {tuning_results['recall']:.4f} ({improvement_final_recall:+.2f}%)\n"
         else:
-            summary_text_recall += "- Hyperparam Tuned: No Hyperparameter Tuning performed\n\n"
-        ax4.text(0, 1, summary_text_recall, fontsize=12, va='top', ha='left', wrap=True)
+            summary_text_recall += "- Hyperparam Tuned: No Hyperparameter Tuning performed\n"
+        ax3.text(0, 0.45, summary_text_recall, fontsize=11, va='top', ha='left', wrap=True)
 
         # Save image
         image_path = os.path.join(report_dir, "optimization_report.png")
@@ -177,26 +177,26 @@ def generate_final_report(baseline_metrics, finetune_results, tuning_results, be
             f.write("STEP 2: HYPERPARAMETER TUNING\n")
             f.write(f"Best hyperparameter configuration:\n{best_config}\n")
             f.write(FINAL_METRICS)
-            f.write(f"  - Accuracy: {tuning_results['accuracy'].item():.4f}\n")
-            f.write(f"  - Precision: {tuning_results['precision'].item():.4f}\n")
-            f.write(f"  - Recall: {tuning_results['recall'].item():.4f}\n")
-            f.write(f"  - F1-Score: {tuning_results['f1']:.4f}\n")
-            f.write(f"  - ROC-AUC: {tuning_results['roc_auc']:.4f}\n")
-            f.write(f"  - Validation Loss: {tuning_results['val_loss']:.4f}\n\n")
+            f.write(f"  - Accuracy: {float(tuning_results['accuracy']):.4f}\n")
+            f.write(f"  - Precision: {float(tuning_results['precision']):.4f}\n")
+            f.write(f"  - Recall: {float(tuning_results['recall']):.4f}\n")
+            f.write(f"  - F1-Score: {float(tuning_results['f1']):.4f}\n")
+            f.write(f"  - ROC-AUC: {float(tuning_results['roc_auc']):.4f}\n")
+            f.write(f"  - Validation Loss: {float(tuning_results['val_loss']):.4f}\n\n")
             f.write("COMPARISON: Baseline vs Fine-tuned vs Fine Tuned and Hyperparameter Tuned\n")
-            improvement_final_f1 = (tuning_results['f1'] - baseline_metrics['f1']) / baseline_metrics['f1'] * 100
-            improvement_final_recall = (tuning_results['recall'] - baseline_metrics['recall']) / baseline_metrics['recall'] * 100
+            improvement_final_f1 = (float(tuning_results['f1']) - baseline_metrics['f1']) / baseline_metrics['f1'] * 100
+            improvement_final_recall = (float(tuning_results['recall']) - baseline_metrics['recall']) / baseline_metrics['recall'] * 100
 
         improvement_finetune_f1 = (finetune_results['f1'] - baseline_metrics['f1']) / baseline_metrics['f1'] * 100
         improvement_finetune_recall = (finetune_results['recall'] - baseline_metrics['recall']) / baseline_metrics['recall'] * 100
         f.write(f"Baseline F1: {baseline_metrics['f1']:.4f}\n")
         f.write(f"Fine Tune F1: {finetune_results['f1']:.4f} ({improvement_finetune_f1:+.2f}%)\n")
         if best_config is not False:
-            f.write(f"  After Hyperparameter Tuning F1: {tuning_results['f1']:.4f} ({improvement_final_f1:+.2f}%)\n")
+            f.write(f"  After Hyperparameter Tuning F1: {float(tuning_results['f1']):.4f} ({improvement_final_f1:+.2f}%)\n")
         f.write(f"Baseline Recall: {baseline_metrics['recall']:.4f}\n")
         f.write(f"Fine Tune Recall: {finetune_results['recall']:.4f} ({improvement_finetune_recall:+.2f}%)\n")
         if best_config is not False:
-            f.write(f"  After Hyperparameter Tuning Recall: {tuning_results['recall']:.4f} ({improvement_final_recall:+.2f}%)\n")
+            f.write(f"  After Hyperparameter Tuning Recall: {float(tuning_results['recall']):.4f} ({improvement_final_recall:+.2f}%)\n")
 
         if best_config is not False:
             f.write("Best hyperparameter configuration:\n")
@@ -206,12 +206,12 @@ def generate_final_report(baseline_metrics, finetune_results, tuning_results, be
             f.write(f"  - Momentum: {best_config['momentum']}\n")
             f.write(f"  - Optimizer: {best_config['optimizer']}\n")
             f.write(FINAL_METRICS)
-            f.write(f"  - Accuracy: {tuning_results['accuracy']:.4f}\n")
-            f.write(f"  - Precision: {tuning_results['precision']:.4f}\n")
-            f.write(f"  - Recall: {tuning_results['recall']:.4f}\n")
-            f.write(f"  - F1-Score: {tuning_results['f1']:.4f}\n")
-            f.write(f"  - ROC-AUC: {tuning_results['roc_auc']:.4f}\n")
-            f.write(f"  - Validation Loss: {tuning_results['val_loss']:.4f}\n\n")
+            f.write(f"  - Accuracy: {float(tuning_results['accuracy']):.4f}\n")
+            f.write(f"  - Precision: {float(tuning_results['precision']):.4f}\n")
+            f.write(f"  - Recall: {float(tuning_results['recall']):.4f}\n")
+            f.write(f"  - F1-Score: {float(tuning_results['f1']):.4f}\n")
+            f.write(f"  - ROC-AUC: {float(tuning_results['roc_auc']):.4f}\n")
+            f.write(f"  - Validation Loss: {float(tuning_results['val_loss']):.4f}\n\n")
 
     print(f"✓ Report saved: {report_path}")
 
