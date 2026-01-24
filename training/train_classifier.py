@@ -176,6 +176,7 @@ def main(config=None):
     criterion = nn.CrossEntropyLoss()
 
     best_recall = 0.0
+    best_f1 = 0.0  
 
     patience = 3
     early_stopping_count = 0
