@@ -1,0 +1,61 @@
+FINAL OPTIMIZATION REPORT
+STEP 0: BASELINE TRAINING (freeze)
+  - Accuracy: 0.8486
+  - Precision: 0.4100
+  - Recall: 0.6533
+  - F1-Score: 0.5039
+  - ROC-AUC: 0.8634
+  - Val Loss: 0.2660
+
+STEP 1: FINE-TUNING
+Final Metrics:
+  - Accuracy: 0.8859
+  - Precision: 0.5110
+  - Recall: 0.6967
+  - F1-Score: 0.5896
+  - ROC-AUC: 0.9140
+  - Val Loss: 0.2292
+
+STEP 2: HYPERPARAMETER TUNING
+Best hyperparameter configuration:
+weight_decay         0.0
+batch_size            64
+lr                  0.01
+momentum             0.8
+optimizer           Adam
+accuracy        0.877647
+recall          0.516667
+precision       0.481366
+f1              0.498392
+roc_auc         0.879013
+val_loss        0.293815
+Name: 8, dtype: object
+Final Metrics:
+  - Accuracy: 0.8247
+  - Precision: 0.3809
+  - Recall: 0.7833
+  - F1-Score: 0.5125
+  - ROC-AUC: 0.8966
+  - Validation Loss: 0.2659
+
+COMPARISON: Baseline vs Fine-tuned vs Fine Tuned and Hyperparameter Tuned
+Baseline F1: 0.5039
+Fine Tune F1: 0.5896 (+17.01%)
+  After Hyperparameter Tuning F1: 0.5125 (+1.72%)
+Baseline Recall: 0.6533
+Fine Tune Recall: 0.6967 (+6.63%)
+  After Hyperparameter Tuning Recall: 0.7833 (+19.90%)
+Best hyperparameter configuration:
+  - Learning Rate: 0.01
+  - Batch Size: 64
+  - Weight Decay: 0.0
+  - Momentum: 0.8
+  - Optimizer: Adam
+Final Metrics:
+  - Accuracy: 0.8247
+  - Precision: 0.3809
+  - Recall: 0.7833
+  - F1-Score: 0.5125
+  - ROC-AUC: 0.8966
+  - Validation Loss: 0.2659
+
