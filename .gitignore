@@ -16,7 +16,7 @@ data/processed/augmented/train/malignant/**.png
 data/processed/augmented/val/**.png
 
 generation/
-
+domain_adaptation/
 __pycache__/
 *.pyc
 *.pth
