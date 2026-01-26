@@ -60,11 +60,10 @@ class DomainShiftEvaluator:
     def _evaluate_domain(self, loader, criterion, domain_name):
         self.model.eval()
         
-        all_preds = []
         all_probs = []
         all_targets = []
         total_loss = 0
-        num_batches = 0
+        num_samples = 0
         
         with torch.no_grad():
             for inputs, targets in loader:
@@ -73,52 +72,69 @@ class DomainShiftEvaluator:
                 outputs = self.model(inputs)
                 loss = criterion(outputs, targets)
                 
-                total_loss += loss.item()
-                num_batches += 1
+                total_loss += loss.item() * inputs.shape[0]
+                num_samples += inputs.shape[0]
                 
-                probs = torch.softmax(outputs, dim=1)
-                preds = torch.argmax(outputs, dim=1)
+                probs = torch.softmax(outputs, dim=1)[:, 1]  # Get probability for class 1 (malignant)
                 
-                all_preds.extend(preds.cpu().numpy())
                 all_probs.extend(probs.cpu().numpy())
                 all_targets.extend(targets.cpu().numpy())
         
-        all_preds = np.array(all_preds)
         all_probs = np.array(all_probs)
         all_targets = np.array(all_targets)
+        avg_loss = total_loss / num_samples
         
-        cm = confusion_matrix(all_targets, all_preds)
+        # Find optimal threshold that maximizes F1 (consistent with evaluate_with_threshold_tuning)
+        precision_vals, recall_vals, thresholds_pr = precision_recall_curve(all_targets, all_probs)
+        f1_scores = 2 * (precision_vals * recall_vals) / (precision_vals + recall_vals + 1e-8)
+        optimal_idx = np.argmax(f1_scores)
+        optimal_threshold = thresholds_pr[optimal_idx] if optimal_idx < len(thresholds_pr) else 0.5
+        
+        logger.info(f"  Optimal threshold (max F1) for {domain_name}: {optimal_threshold:.3f}")
+        
+        # Generate predictions with optimal threshold
+        optimal_preds = (all_probs >= optimal_threshold).astype(int)
+        
+        # Also keep default 0.5 threshold predictions for comparison
+        default_preds = (all_probs >= 0.5).astype(int)
+        
+        # Calculate metrics with optimal threshold
+        cm = confusion_matrix(all_targets, optimal_preds)
         
         tn, fp, fn, tp = cm.ravel() if cm.shape == (2, 2) else (0, 0, 0, 0)
         specificity = tn / (tn + fp) if (tn + fp) > 0 else 0
         sensitivity = tp / (tp + fn) if (tp + fn) > 0 else 0
         
         try:
-            roc_auc = roc_auc_score(all_targets, all_probs[:, 1])
+            roc_auc = roc_auc_score(all_targets, all_probs)
         except:
             roc_auc = 0
         
         try:
-            precision_vals, recall_vals, _ = precision_recall_curve(all_targets, all_probs[:, 1])
             pr_auc = auc(recall_vals, precision_vals)
         except:
             pr_auc = 0
         
         metrics = {
             'domain': domain_name,
-            'loss': total_loss / num_batches,
-            'accuracy': accuracy_score(all_targets, all_preds),
-            'precision': precision_score(all_targets, all_preds, zero_division=0),
-            'recall': recall_score(all_targets, all_preds, zero_division=0),
-            'f1': f1_score(all_targets, all_preds, zero_division=0),
+            'loss': avg_loss,
+            'accuracy': accuracy_score(all_targets, optimal_preds),
+            'precision': precision_score(all_targets, optimal_preds, zero_division=0),
+            'recall': recall_score(all_targets, optimal_preds, zero_division=0),
+            'f1': f1_score(all_targets, optimal_preds, zero_division=0),
             'specificity': specificity,
             'sensitivity': sensitivity,
             'roc_auc': roc_auc,
             'pr_auc': pr_auc,
             'confusion_matrix': cm,
-            'preds': all_preds,
+            'optimal_threshold': optimal_threshold,
+            'preds': optimal_preds,
             'targets': all_targets,
-            'probs': all_probs
+            'probs': all_probs,
+            # Also store default threshold metrics for comparison
+            'default_threshold_accuracy': accuracy_score(all_targets, default_preds),
+            'default_threshold_f1': f1_score(all_targets, default_preds, zero_division=0),
+            'default_threshold_cm': confusion_matrix(all_targets, default_preds)
         }
         
         return metrics
@@ -222,6 +238,9 @@ class DomainShiftEvaluator:
                 'sensitivity': float(source_metrics['sensitivity']),
                 'roc_auc': float(source_metrics['roc_auc']),
                 'pr_auc': float(source_metrics['pr_auc']),
+                'optimal_threshold': float(source_metrics['optimal_threshold']),
+                'default_threshold_accuracy': float(source_metrics['default_threshold_accuracy']),
+                'default_threshold_f1': float(source_metrics['default_threshold_f1']),
             },
             'target_domain': {
                 'loss': float(target_metrics['loss']),
@@ -233,6 +252,9 @@ class DomainShiftEvaluator:
                 'sensitivity': float(target_metrics['sensitivity']),
                 'roc_auc': float(target_metrics['roc_auc']),
                 'pr_auc': float(target_metrics['pr_auc']),
+                'optimal_threshold': float(target_metrics['optimal_threshold']),
+                'default_threshold_accuracy': float(target_metrics['default_threshold_accuracy']),
+                'default_threshold_f1': float(target_metrics['default_threshold_f1']),
             },
             'domain_gap': {k: float(v) for k, v in domain_gap.items()}
         }
@@ -272,11 +294,13 @@ class DomainShiftEvaluator:
         logger.info("DOMAIN SHIFT EVALUATION SUMMARY")
         logger.info("="*70)
         logger.info("\nSource Domain (Real Benign + Synthetic Malignant):")
+        logger.info(f"  Optimal Threshold: {source_metrics['optimal_threshold']:.3f}")
         logger.info(f"  Accuracy: {source_metrics['accuracy']:.4f}")
         logger.info(f"  F1-Score: {source_metrics['f1']:.4f}")
         logger.info(f"  Recall:   {source_metrics['recall']:.4f}")
         logger.info(f"  ROC-AUC:  {source_metrics['roc_auc']:.4f}")
         logger.info("\nTarget Domain (Real Benign + Real Malignant):")
+        logger.info(f"  Optimal Threshold: {target_metrics['optimal_threshold']:.3f}")
         logger.info(f"  Accuracy: {target_metrics['accuracy']:.4f}")
         logger.info(f"  F1-Score: {target_metrics['f1']:.4f}")
         logger.info(f"  Recall:   {target_metrics['recall']:.4f}")

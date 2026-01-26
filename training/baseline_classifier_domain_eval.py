@@ -131,9 +131,25 @@ def train_classifier_with_domain_shift_eval(
         pretrained=config['model']['pretrained']
     ).to(device)
     
+    # Freeze backbone and only train classification head
+    # This prevents overfitting to GAN artifacts in deep features
+    logger.info("\n" + "="*70)
+    logger.info("MODEL CONFIGURATION")
+    logger.info("="*70)
+    logger.info("Freezing backbone layers (only training final classifier)")
+    logger.info("  Reason: Use ImageNet features, learn only benign/malignant boundary")
+    logger.info("  Benefit: Prevents overfitting to GAN-specific artifacts")
+    model.freeze_layers_except_last()
+    
+    # Count trainable parameters
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    total_params = sum(p.numel() for p in model.parameters())
+    logger.info(f"  Trainable parameters: {trainable_params:,} / {total_params:,} ({100*trainable_params/total_params:.2f}%)")
+    
     criterion = nn.CrossEntropyLoss()
+    # Only optimize parameters that require gradients (final layer)
     optimizer = optim.Adam(
-        model.parameters(),
+        filter(lambda p: p.requires_grad, model.parameters()),
         lr=config['training']['learning_rate'],
         weight_decay=config['training'].get('weight_decay', 1e-5)
     )
