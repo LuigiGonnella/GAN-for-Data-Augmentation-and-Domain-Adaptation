@@ -235,29 +235,27 @@ def train_dann(
         
         scheduler.step()
         
-        # Evaluate every few epochs
-        if (epoch + 1) % 5 == 0 or epoch == 0 or epoch == num_epochs - 1:
-            # Evaluate using DANNTrainer's evaluate method
-            _, source_acc, source_recall = trainer.evaluate(source_eval_loader, criterion_class)
-            _, target_acc, target_recall = trainer.evaluate(target_eval_loader, criterion_class)
-            
-            training_history['source_acc'].append(source_acc)
-            training_history['target_acc'].append(target_acc)
-            training_history['source_recall'].append(source_recall)
-            training_history['target_recall'].append(target_recall)
-            
-            logger.info(f"\nEpoch [{epoch+1}/{num_epochs}]")
-            logger.info(f"  Class Loss: {avg_class_loss:.4f}")
-            logger.info(f"  Domain Loss: {avg_domain_loss:.4f}")
-            logger.info(f"  Lambda: {lambda_adapt:.3f}")
-            logger.info(f"  Source - Accuracy: {source_acc:.4f}, Recall: {source_recall:.4f}")
-            logger.info(f"  Target - Accuracy: {target_acc:.4f}, Recall: {target_recall:.4f}")
-            
-            # Save best model based on target RECALL (most important for cancer detection)
-            if target_recall > best_target_recall:
-                best_target_recall = target_recall
-                torch.save(model.state_dict(), output_dir / 'best_dann_model.pth')
-                logger.info(f"  ✓ New best target recall: {best_target_recall:.4f}")
+        # Evaluate using DANNTrainer's evaluate method
+        _, source_acc, source_recall = trainer.evaluate(source_eval_loader, criterion_class)
+        _, target_acc, target_recall = trainer.evaluate(target_eval_loader, criterion_class)
+        
+        training_history['source_acc'].append(source_acc)
+        training_history['target_acc'].append(target_acc)
+        training_history['source_recall'].append(source_recall)
+        training_history['target_recall'].append(target_recall)
+        
+        logger.info(f"\nEpoch [{epoch+1}/{num_epochs}]")
+        logger.info(f"  Class Loss: {avg_class_loss:.4f}")
+        logger.info(f"  Domain Loss: {avg_domain_loss:.4f}")
+        logger.info(f"  Lambda: {lambda_adapt:.3f}")
+        logger.info(f"  Source - Accuracy: {source_acc:.4f}, Recall: {source_recall:.4f}")
+        logger.info(f"  Target - Accuracy: {target_acc:.4f}, Recall: {target_recall:.4f}")
+        
+        # Save best model based on target RECALL (most important for cancer detection)
+        if target_recall > best_target_recall:
+            best_target_recall = target_recall
+            torch.save(model.state_dict(), output_dir / 'best_dann_model.pth')
+            logger.info(f"  ✓ New best target recall: {best_target_recall:.4f}")
     
     logger.info(f"\nTraining completed. Best target recall: {best_target_recall:.4f}")
     logger.info(f"Model saved to: {output_dir / 'best_dann_model.pth'}")

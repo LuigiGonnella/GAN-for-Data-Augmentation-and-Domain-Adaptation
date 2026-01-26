@@ -1,0 +1,39 @@
+{
+    "source_domain": {
+        "loss": 0.11938769366115679,
+        "accuracy": 0.955968992248062,
+        "precision": 0.8921232876712328,
+        "recall": 0.8683333333333333,
+        "f1": 0.8800675675675675,
+        "specificity": 0.976,
+        "sensitivity": 0.8683333333333333,
+        "roc_auc": 0.9872236904761904,
+        "pr_auc": 0.9546265309906046,
+        "optimal_threshold": 0.48176828026771545,
+        "default_threshold_accuracy": 0.9556589147286821,
+        "default_threshold_f1": 0.8784530386740331
+    },
+    "target_domain": {
+        "loss": 0.8078347537622732,
+        "accuracy": 0.13058823529411764,
+        "precision": 0.11858336649423,
+        "recall": 0.9933333333333333,
+        "f1": 0.2118734447209385,
+        "specificity": 0.015555555555555555,
+        "sensitivity": 0.9933333333333333,
+        "roc_auc": 0.38293481481481484,
+        "pr_auc": 0.08951543972092846,
+        "optimal_threshold": 1.3738046618527733e-05,
+        "default_threshold_accuracy": 0.8635294117647059,
+        "default_threshold_f1": 0.011363636363636364
+    },
+    "domain_gap": {
+        "accuracy_drop": 0.8253807569539443,
+        "f1_drop": 0.668194122846629,
+        "recall_drop": -0.125,
+        "precision_drop": 0.7735399211770029,
+        "sensitivity_drop": -0.125,
+        "specificity_drop": 0.9604444444444444,
+        "roc_auc_drop": 0.6042888756613756
+    }
+}
