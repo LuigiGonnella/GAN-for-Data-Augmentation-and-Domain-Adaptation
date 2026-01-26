@@ -275,8 +275,9 @@ class DANNTrainer:
         Returns:
             avg_loss: Average loss
             accuracy: Classification accuracy with optimal threshold
+            recall: Recall/sensitivity with optimal threshold
         """
-        from sklearn.metrics import precision_recall_curve, accuracy_score
+        from sklearn.metrics import precision_recall_curve, accuracy_score, recall_score
         
         self.model.eval()
         
@@ -314,5 +315,6 @@ class DANNTrainer:
         # Generate predictions with optimal threshold
         optimal_preds = (all_probs >= optimal_threshold).astype(int)
         accuracy = accuracy_score(all_targets, optimal_preds)
+        recall = recall_score(all_targets, optimal_preds, zero_division=0)
         
-        return avg_loss, accuracy
+        return avg_loss, accuracy, recall

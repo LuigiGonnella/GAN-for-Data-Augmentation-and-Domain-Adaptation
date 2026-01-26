@@ -43,7 +43,8 @@ logger = logging.getLogger(__name__)
 
 def train_dann(
     config_path,
-    source_dir='data/processed/domain_adaptation/source_synthetic/train',
+    source_train_dir='data/processed/domain_adaptation/source_synthetic/train',
+    source_val_dir='data/processed/domain_adaptation/source_synthetic/val',
     target_dir='data/processed/domain_adaptation/target_real/test',
     output_dir='results/domain_shift/dann'
 ):
@@ -51,7 +52,8 @@ def train_dann(
     
     Args:
         config_path: Path to training configuration YAML
-        source_dir: Source domain (real benign + synthetic malignant)
+        source_train_dir: Source training data (real benign + synthetic malignant)
+        source_val_dir: Source validation data (real benign + synthetic malignant)
         target_dir: Target domain (real benign + real malignant)
         output_dir: Directory for results and metrics
     
@@ -98,20 +100,32 @@ def train_dann(
     logger.info("DATA LOADING")
     logger.info("="*70)
     
-    logger.info(f"Source domain (TRAINING): {source_dir}")
+    logger.info(f"Source TRAIN: {source_train_dir}")
     logger.info("  - Real benign + Synthetic malignant (labeled)")
-    source_dataset = datasets.ImageFolder(source_dir, transform=train_transform)
-    source_loader = DataLoader(
-        source_dataset,
+    source_train_dataset = datasets.ImageFolder(source_train_dir, transform=train_transform)
+    source_train_loader = DataLoader(
+        source_train_dataset,
         batch_size=config['training']['batch_size'],
         shuffle=True,
         num_workers=4,
         drop_last=True  # Ensure consistent batch sizes
     )
-    logger.info(f"  - Total: {len(source_dataset)} samples")
-    logger.info(f"  - Classes: {source_dataset.classes}")
+    logger.info(f"  - Total: {len(source_train_dataset)} samples")
+    logger.info(f"  - Classes: {source_train_dataset.classes}")
     
-    logger.info(f"\nTarget domain (ADAPTATION): {target_dir}")
+    logger.info(f"\nSource VAL: {source_val_dir}")
+    logger.info("  - Real benign + Synthetic malignant (for monitoring)")
+    source_val_dataset = datasets.ImageFolder(source_val_dir, transform=test_transform)
+    source_val_loader = DataLoader(
+        source_val_dataset,
+        batch_size=config['training']['batch_size'],
+        shuffle=False,
+        num_workers=4
+    )
+    logger.info(f"  - Total: {len(source_val_dataset)} samples")
+    logger.info(f"  - Classes: {source_val_dataset.classes}")
+    
+    logger.info(f"\nTarget (ADAPTATION): {target_dir}")
     logger.info("  - Real benign + Real malignant (unlabeled for adaptation)")
     target_dataset = datasets.ImageFolder(target_dir, transform=train_transform)
     target_loader = DataLoader(
@@ -126,7 +140,7 @@ def train_dann(
     
     # For evaluation (no augmentation)
     logger.info("\nCreating evaluation loaders (no augmentation)...")
-    source_eval_dataset = datasets.ImageFolder(source_dir, transform=test_transform)
+    source_eval_dataset = datasets.ImageFolder(source_train_dir, transform=test_transform)
     source_eval_loader = DataLoader(
         source_eval_dataset,
         batch_size=config['training']['batch_size'],
@@ -186,15 +200,18 @@ def train_dann(
     num_epochs = config['training']['num_epochs']
     logger.info(f"Training for {num_epochs} epochs with domain adversarial loss...")
     logger.info(f"Lambda schedule: Gradually increases from 0 to 1")
+    logger.info(f"Model selection: Best model based on TARGET RECALL (sensitivity)")
     
-    best_target_acc = 0.0
+    best_target_recall = 0.0
     training_history = {
         'class_loss': [],
         'domain_loss': [],
         'total_loss': [],
         'lambda_values': [],
         'source_acc': [],
-        'target_acc': []
+        'target_acc': [],
+        'source_recall': [],
+        'target_recall': []
     }
     
     for epoch in range(num_epochs):
@@ -204,7 +221,7 @@ def train_dann(
         
         # Train one epoch using DANNTrainer
         avg_total_loss, avg_class_loss, avg_domain_loss = trainer.train_epoch(
-            source_loader, 
+            source_train_loader, 
             target_loader, 
             optimizer,
             criterion_class,
@@ -221,26 +238,28 @@ def train_dann(
         # Evaluate every few epochs
         if (epoch + 1) % 5 == 0 or epoch == 0 or epoch == num_epochs - 1:
             # Evaluate using DANNTrainer's evaluate method
-            _, source_acc = trainer.evaluate(source_eval_loader, criterion_class)
-            _, target_acc = trainer.evaluate(target_eval_loader, criterion_class)
+            _, source_acc, source_recall = trainer.evaluate(source_eval_loader, criterion_class)
+            _, target_acc, target_recall = trainer.evaluate(target_eval_loader, criterion_class)
             
             training_history['source_acc'].append(source_acc)
             training_history['target_acc'].append(target_acc)
+            training_history['source_recall'].append(source_recall)
+            training_history['target_recall'].append(target_recall)
             
             logger.info(f"\nEpoch [{epoch+1}/{num_epochs}]")
             logger.info(f"  Class Loss: {avg_class_loss:.4f}")
             logger.info(f"  Domain Loss: {avg_domain_loss:.4f}")
             logger.info(f"  Lambda: {lambda_adapt:.3f}")
-            logger.info(f"  Source Accuracy: {source_acc:.4f}")
-            logger.info(f"  Target Accuracy: {target_acc:.4f}")
+            logger.info(f"  Source - Accuracy: {source_acc:.4f}, Recall: {source_recall:.4f}")
+            logger.info(f"  Target - Accuracy: {target_acc:.4f}, Recall: {target_recall:.4f}")
             
-            # Save best model based on target accuracy
-            if target_acc > best_target_acc:
-                best_target_acc = target_acc
+            # Save best model based on target RECALL (most important for cancer detection)
+            if target_recall > best_target_recall:
+                best_target_recall = target_recall
                 torch.save(model.state_dict(), output_dir / 'best_dann_model.pth')
-                logger.info(f"  ✓ New best target accuracy: {best_target_acc:.4f}")
+                logger.info(f"  ✓ New best target recall: {best_target_recall:.4f}")
     
-    logger.info(f"\nTraining completed. Best target accuracy: {best_target_acc:.4f}")
+    logger.info(f"\nTraining completed. Best target recall: {best_target_recall:.4f}")
     logger.info(f"Model saved to: {output_dir / 'best_dann_model.pth'}")
     
     # Load best model
@@ -312,7 +331,7 @@ def train_dann(
         'target_metrics': convert_to_serializable(target_metrics),
         'domain_gap': convert_to_serializable(domain_gap),
         'training_history': training_history,
-        'best_target_accuracy': float(best_target_acc),
+        'best_target_recall': float(best_target_recall),
         'interpretation': {
             'accuracy_gap_percentage': float(acc_gap * 100),
             'quality_assessment': 'excellent' if acc_gap < 0.05 else 'good' if acc_gap < 0.10 else 'moderate' if acc_gap < 0.20 else 'poor'
@@ -334,7 +353,8 @@ def main():
 Example usage:
   python train_with_dann.py \\
     --config experiments/domain_shift_eval.yaml \\
-    --source-dir data/processed/domain_adaptation/source_synthetic/train \\
+    --source-train-dir data/processed/domain_adaptation/source_synthetic/train \\
+    --source-val-dir data/processed/domain_adaptation/source_synthetic/val \\
     --target-dir data/processed/domain_adaptation/target_real/test \\
     --output-dir results/domain_shift/dann
 
@@ -352,10 +372,16 @@ DANN learns domain-invariant features through adversarial training:
         help='Path to training configuration YAML file'
     )
     parser.add_argument(
-        '--source-dir',
+        '--source-train-dir',
         type=str,
         default='data/processed/domain_adaptation/source_synthetic/train',
-        help='Source domain: real benign + synthetic malignant (labeled)'
+        help='Source training: real benign + synthetic malignant (labeled)'
+    )
+    parser.add_argument(
+        '--source-val-dir',
+        type=str,
+        default='data/processed/domain_adaptation/source_synthetic/val',
+        help='Source validation: real benign + synthetic malignant (for monitoring)'
     )
     parser.add_argument(
         '--target-dir',
@@ -374,7 +400,8 @@ DANN learns domain-invariant features through adversarial training:
     
     train_dann(
         args.config,
-        args.source_dir,
+        args.source_train_dir,
+        args.source_val_dir,
         args.target_dir,
         args.output_dir
     )

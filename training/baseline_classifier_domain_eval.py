@@ -38,7 +38,8 @@ logger = logging.getLogger(__name__)
 
 def train_classifier_with_domain_shift_eval(
     config_path,
-    source_dir='data/processed/domain_adaptation/source_synthetic/train',
+    source_train_dir='data/processed/domain_adaptation/source_synthetic/train',
+    source_val_dir='data/processed/domain_adaptation/source_synthetic/val',
     target_dir='data/processed/domain_adaptation/target_real/test',
     output_dir='results/domain_shift/baseline'
 ):
@@ -46,7 +47,8 @@ def train_classifier_with_domain_shift_eval(
     
     Args:
         config_path: Path to training configuration YAML
-        source_dir: Source domain (real benign + synthetic malignant)
+        source_train_dir: Source training data (real benign + synthetic malignant)
+        source_val_dir: Source validation data (real benign + synthetic malignant)
         target_dir: Target domain (real benign + real malignant)
         output_dir: Directory for results and metrics
     
@@ -99,20 +101,33 @@ def train_classifier_with_domain_shift_eval(
     logger.info("\n" + "="*70)
     logger.info("DATA LOADING")
     logger.info("="*70)
-    logger.info(f"Source domain (TRAINING): {source_dir}")
+    logger.info(f"Source TRAIN: {source_train_dir}")
     logger.info("  - Real benign + Synthetic malignant (GAN-generated)")
     logger.info("  - Using augmentation to learn robust features (not GAN artifacts)")
-    source_dataset = datasets.ImageFolder(source_dir, transform=train_transform)
-    source_loader = DataLoader(
-        source_dataset,
+    source_train_dataset = datasets.ImageFolder(source_train_dir, transform=train_transform)
+    source_train_loader = DataLoader(
+        source_train_dataset,
         batch_size=config['training']['batch_size'],
         shuffle=True,
         num_workers=4
     )
-    logger.info(f"  - Total: {len(source_dataset)} samples")
-    logger.info(f"  - Classes: {source_dataset.classes}")
+    logger.info(f"  - Total: {len(source_train_dataset)} samples")
+    logger.info(f"  - Classes: {source_train_dataset.classes}")
     
-    logger.info(f"\nTarget domain (TESTING): {target_dir}")
+    logger.info(f"\nSource VAL: {source_val_dir}")
+    logger.info("  - Real benign + Synthetic malignant (validation split)")
+    logger.info("  - No augmentation (for monitoring)")
+    source_val_dataset = datasets.ImageFolder(source_val_dir, transform=test_transform)
+    source_val_loader = DataLoader(
+        source_val_dataset,
+        batch_size=config['training']['batch_size'],
+        shuffle=False,
+        num_workers=4
+    )
+    logger.info(f"  - Total: {len(source_val_dataset)} samples")
+    logger.info(f"  - Classes: {source_val_dataset.classes}")
+    
+    logger.info(f"\nTarget TEST: {target_dir}")
     logger.info("  - Real benign + Real malignant (held-out real data)")
     logger.info("  - No augmentation (standard evaluation)")
     target_dataset = datasets.ImageFolder(target_dir, transform=test_transform)
@@ -165,8 +180,9 @@ def train_classifier_with_domain_shift_eval(
     logger.info("="*70)
     num_epochs = config['training']['num_epochs']
     logger.info(f"Training for {num_epochs} epochs...")
+    logger.info(f"Using source validation set for early stopping (recall-based)")
     
-    best_train_loss = float('inf')
+    best_val_recall = 0.0
     
     for epoch in range(num_epochs):
         model.train()
@@ -174,7 +190,7 @@ def train_classifier_with_domain_shift_eval(
         train_correct = 0
         train_total = 0
         
-        for images, labels in source_loader:
+        for images, labels in source_train_loader:
             images, labels = images.to(device), labels.to(device)
             
             optimizer.zero_grad()
@@ -188,22 +204,42 @@ def train_classifier_with_domain_shift_eval(
             train_correct += (predicted == labels).sum().item()
             train_total += labels.size(0)
         
-        avg_train_loss = train_loss / len(source_loader)
+        avg_train_loss = train_loss / len(source_train_loader)
         train_acc = train_correct / train_total
+        
+        # Validation evaluation
+        model.eval()
+        val_preds = []
+        val_labels_list = []
+        
+        with torch.no_grad():
+            for images, labels in source_val_loader:
+                images = images.to(device)
+                outputs = model(images)
+                _, predicted = torch.max(outputs, 1)
+                val_preds.extend(predicted.cpu().numpy())
+                val_labels_list.extend(labels.numpy())
+        
+        # Calculate validation recall (class 1 = malignant)
+        from sklearn.metrics import classification_report
+        val_report = classification_report(val_labels_list, val_preds, output_dict=True, zero_division=0)
+        val_recall = val_report.get('1', {}).get('recall', 0.0)  # Malignant recall
+        val_acc = val_report['accuracy']
         
         scheduler.step()
         
         if (epoch + 1) % 5 == 0 or epoch == 0:
             logger.info(f"Epoch [{epoch+1}/{num_epochs}] - "
-                       f"Loss: {avg_train_loss:.4f}, "
-                       f"Acc: {train_acc:.4f}")
+                       f"Train Loss: {avg_train_loss:.4f}, Train Acc: {train_acc:.4f} | "
+                       f"Val Acc: {val_acc:.4f}, Val Recall: {val_recall:.4f}")
         
-        # Save best model based on training loss
-        if avg_train_loss < best_train_loss:
-            best_train_loss = avg_train_loss
+        # Save best model based on validation recall
+        if val_recall > best_val_recall:
+            best_val_recall = val_recall
             torch.save(model.state_dict(), output_dir / 'best_model.pth')
+            logger.info(f"  -> New best model (Val Recall: {val_recall:.4f})")
     
-    logger.info(f"\nTraining completed. Best loss: {best_train_loss:.4f}")
+    logger.info(f"\nTraining completed. Best validation recall: {best_val_recall:.4f}")
     logger.info(f"Model saved to: {output_dir / 'best_model.pth'}")
     
     # Load best model
@@ -293,7 +329,8 @@ def main():
 Example usage:
   python baseline_classifier_domain_eval.py \\
     --config experiments/domain_shift_eval.yaml \\
-    --source-dir data/processed/domain_adaptation/source_synthetic/train \\
+    --source-train-dir data/processed/domain_adaptation/source_synthetic/train \\
+    --source-val-dir data/processed/domain_adaptation/source_synthetic/val \\
     --target-dir data/processed/domain_adaptation/target_real/test \\
     --output-dir results/domain_shift/baseline
 
@@ -308,10 +345,16 @@ Smaller performance gap = Better GAN quality.
         help='Path to training configuration YAML file'
     )
     parser.add_argument(
-        '--source-dir',
+        '--source-train-dir',
         type=str,
         default='data/processed/domain_adaptation/source_synthetic/train',
-        help='Source domain: real benign + synthetic malignant (GAN output)'
+        help='Source training: real benign + synthetic malignant (GAN output)'
+    )
+    parser.add_argument(
+        '--source-val-dir',
+        type=str,
+        default='data/processed/domain_adaptation/source_synthetic/val',
+        help='Source validation: real benign + synthetic malignant (for early stopping)'
     )
     parser.add_argument(
         '--target-dir',
@@ -330,7 +373,8 @@ Smaller performance gap = Better GAN quality.
     
     train_classifier_with_domain_shift_eval(
         args.config,
-        args.source_dir,
+        args.source_train_dir,
+        args.source_val_dir,
         args.target_dir,
         args.output_dir
     )
