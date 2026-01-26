@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import numpy as np
+from torch.autograd import Function
 
 
 class FeatureExtractor(nn.Module):
@@ -123,16 +125,71 @@ class DomainAdversarialNN(nn.Module):
         return total_loss, class_loss, domain_loss
 
 
+class GradientReversalFunction(Function):
+    """Gradient Reversal Layer for adversarial training.
+    
+    Forward pass: identity (output = input)
+    Backward pass: reverses gradients (grad_input = -lambda * grad_output)
+    """
+    
+    @staticmethod
+    def forward(ctx, x, lambda_):
+        ctx.lambda_ = lambda_
+        return x.view_as(x)
+    
+    @staticmethod
+    def backward(ctx, grad_output):
+        return grad_output.neg() * ctx.lambda_, None
+
+
+class GradientReversalLayer(nn.Module):
+    """Wrapper module for gradient reversal."""
+    
+    def __init__(self, lambda_=1.0):
+        super().__init__()
+        self.lambda_ = lambda_
+    
+    def forward(self, x):
+        return GradientReversalFunction.apply(x, self.lambda_)
+
+
 class DANNTrainer:
+    """Trainer for Domain Adversarial Neural Networks with gradient reversal."""
     
     def __init__(self, model, device, output_dir='results/dann'):
         self.model = model
         self.device = device
         self.output_dir = output_dir
+        self.grl = GradientReversalLayer()
     
-    def train_step(self, source_loader, target_loader, optimizer, criterion, 
-                   lambda_d=0.1, num_classes=2):
+    @staticmethod
+    def compute_lambda_adaptation(epoch, max_epochs, gamma=10.0):
+        """Compute adaptive lambda following DANN paper schedule.
         
+        lambda_p = 2 / (1 + exp(-gamma * p)) - 1
+        where p = epoch / max_epochs ranges from 0 to 1
+        """
+        p = epoch / max_epochs
+        lambda_p = 2.0 / (1.0 + np.exp(-gamma * p)) - 1.0
+        return lambda_p
+    
+    def train_epoch(self, source_loader, target_loader, optimizer, 
+                    criterion_class, criterion_domain, lambda_adapt):
+        """Train one epoch with gradient reversal.
+        
+        Args:
+            source_loader: DataLoader for source domain (labeled)
+            target_loader: DataLoader for target domain (unlabeled)
+            optimizer: Optimizer for all model parameters
+            criterion_class: Loss function for classification
+            criterion_domain: Loss function for domain discrimination
+            lambda_adapt: Adaptive weight for domain loss
+            
+        Returns:
+            avg_total_loss: Average total loss
+            avg_class_loss: Average classification loss
+            avg_domain_loss: Average domain discrimination loss
+        """
         self.model.train()
         
         total_loss = 0
@@ -140,33 +197,64 @@ class DANNTrainer:
         total_domain_loss = 0
         num_batches = 0
         
-        for (source_img, source_label), (target_img, target_label) in zip(source_loader, target_loader):
+        # Update GRL lambda
+        self.grl.lambda_ = lambda_adapt
+        
+        source_iter = iter(source_loader)
+        target_iter = iter(target_loader)
+        
+        num_iters = min(len(source_loader), len(target_loader))
+        
+        for _ in range(num_iters):
+            # Get source and target batches
+            try:
+                source_img, source_label = next(source_iter)
+            except StopIteration:
+                source_iter = iter(source_loader)
+                source_img, source_label = next(source_iter)
+            
+            try:
+                target_img, _ = next(target_iter)
+            except StopIteration:
+                target_iter = iter(target_loader)
+                target_img, _ = next(target_iter)
             
             source_img = source_img.to(self.device)
             source_label = source_label.to(self.device)
             target_img = target_img.to(self.device)
             
-            source_features = self.model.get_features(source_img)
-            source_class_logits = self.model.classifier(source_features)
-            source_domain_logits = self.model.domain_discriminator(source_features)
+            # Extract features
+            source_features = self.model.feature_extractor(source_img)
+            target_features = self.model.feature_extractor(target_img)
             
-            target_features = self.model.get_features(target_img)
-            target_domain_logits = self.model.domain_discriminator(target_features)
+            # Classification loss (only on source domain)
+            source_class_output = self.model.classifier(source_features)
+            class_loss = criterion_class(source_class_output, source_label)
             
-            source_domain_labels = torch.zeros(source_img.size(0), device=self.device)
-            target_domain_labels = torch.ones(target_img.size(0), device=self.device)
+            # Domain discrimination with gradient reversal
+            source_features_reversed = self.grl(source_features)
+            target_features_reversed = self.grl(target_features)
             
-            domain_logits = torch.cat([source_domain_logits, target_domain_logits], dim=0)
-            domain_labels = torch.cat([source_domain_labels, target_domain_labels], dim=0)
+            source_domain_output = self.model.domain_discriminator(source_features_reversed)
+            target_domain_output = self.model.domain_discriminator(target_features_reversed)
             
-            class_loss = nn.CrossEntropyLoss()(source_class_logits, source_label)
-            domain_loss = nn.BCELoss()(domain_logits.squeeze(), domain_labels)
-            total = class_loss + lambda_d * domain_loss
+            # Domain labels: 0 = source, 1 = target
+            source_domain_labels = torch.zeros(source_img.size(0), 1).to(self.device)
+            target_domain_labels = torch.ones(target_img.size(0), 1).to(self.device)
             
+            domain_loss_source = criterion_domain(source_domain_output, source_domain_labels)
+            domain_loss_target = criterion_domain(target_domain_output, target_domain_labels)
+            domain_loss = domain_loss_source + domain_loss_target
+            
+            # Total loss
+            total = class_loss + lambda_adapt * domain_loss
+            
+            # Backward and optimize
             optimizer.zero_grad()
             total.backward()
             optimizer.step()
             
+            # Track losses
             total_loss += total.item()
             total_class_loss += class_loss.item()
             total_domain_loss += domain_loss.item()
@@ -178,10 +266,24 @@ class DANNTrainer:
     
     @torch.no_grad()
     def evaluate(self, loader, criterion):
+        """Evaluate model on a given loader with optimal threshold tuning.
+        
+        Args:
+            loader: DataLoader for evaluation
+            criterion: Loss function
+            
+        Returns:
+            avg_loss: Average loss
+            accuracy: Classification accuracy with optimal threshold
+        """
+        from sklearn.metrics import precision_recall_curve, accuracy_score
+        
         self.model.eval()
         
         total_loss = 0
-        num_batches = 0
+        all_probs = []
+        all_targets = []
+        num_samples = 0
         
         for images, labels in loader:
             images = images.to(self.device)
@@ -190,7 +292,27 @@ class DANNTrainer:
             logits = self.model(images)
             loss = criterion(logits, labels)
             
-            total_loss += loss.item()
-            num_batches += 1
+            # Get probability for class 1 (malignant)
+            probs = torch.softmax(logits, dim=1)[:, 1]
+            
+            all_probs.extend(probs.cpu().numpy())
+            all_targets.extend(labels.cpu().numpy())
+            
+            total_loss += loss.item() * images.shape[0]
+            num_samples += images.shape[0]
         
-        return total_loss / num_batches
+        all_probs = np.array(all_probs)
+        all_targets = np.array(all_targets)
+        avg_loss = total_loss / num_samples
+        
+        # Find optimal threshold that maximizes F1
+        precision_vals, recall_vals, thresholds_pr = precision_recall_curve(all_targets, all_probs)
+        f1_scores = 2 * (precision_vals * recall_vals) / (precision_vals + recall_vals + 1e-8)
+        optimal_idx = np.argmax(f1_scores)
+        optimal_threshold = thresholds_pr[optimal_idx] if optimal_idx < len(thresholds_pr) else 0.5
+        
+        # Generate predictions with optimal threshold
+        optimal_preds = (all_probs >= optimal_threshold).astype(int)
+        accuracy = accuracy_score(all_targets, optimal_preds)
+        
+        return avg_loss, accuracy
