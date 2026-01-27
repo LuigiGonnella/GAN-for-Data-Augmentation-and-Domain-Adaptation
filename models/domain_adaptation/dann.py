@@ -76,8 +76,7 @@ class DomainDiscriminator(nn.Module):
             nn.ReLU(inplace=True),
             nn.Dropout(0.5),
             
-            nn.Linear(128, 1),
-            nn.Sigmoid()
+            nn.Linear(128, 1)  # No sigmoid - use BCEWithLogitsLoss for stability
         )
     
     def forward(self, x):
@@ -182,8 +181,8 @@ class DANNTrainer:
             target_loader: DataLoader for target domain (unlabeled)
             optimizer: Optimizer for all model parameters
             criterion_class: Loss function for classification
-            criterion_domain: Loss function for domain discrimination
-            lambda_adapt: Adaptive weight for domain loss
+            criterion_domain: Loss function for domain discrimination (use BCEWithLogitsLoss)
+            lambda_adapt: Adaptive weight for domain loss (applied via GRL)
             
         Returns:
             avg_total_loss: Average total loss
@@ -195,9 +194,11 @@ class DANNTrainer:
         total_loss = 0
         total_class_loss = 0
         total_domain_loss = 0
+        total_domain_correct = 0
+        total_domain_samples = 0
         num_batches = 0
         
-        # Update GRL lambda
+        # Update GRL lambda - this handles the λ weighting
         self.grl.lambda_ = lambda_adapt
         
         source_iter = iter(source_loader)
@@ -246,8 +247,19 @@ class DANNTrainer:
             domain_loss_target = criterion_domain(target_domain_output, target_domain_labels)
             domain_loss = domain_loss_source + domain_loss_target
             
-            # Total loss
-            total = class_loss + lambda_adapt * domain_loss
+            # Calculate domain accuracy for monitoring (optional debugging metric)
+            # Goal: ~50% means perfect domain invariance (discriminator can't tell domains apart)
+            with torch.no_grad():
+                source_domain_preds = (torch.sigmoid(source_domain_output) < 0.5).float()
+                target_domain_preds = (torch.sigmoid(target_domain_output) >= 0.5).float()
+                domain_correct = source_domain_preds.sum() + target_domain_preds.sum()
+                total_domain_correct += domain_correct.item()
+                total_domain_samples += source_img.size(0) + target_img.size(0)
+            
+            # Total loss: class_loss + domain_loss
+            # NOTE: λ weighting already applied by GRL, so we don't multiply domain_loss by lambda_adapt here
+            # (Otherwise we'd get λ² scaling which is incorrect)
+            total = class_loss + domain_loss
             
             # Backward and optimize
             optimizer.zero_grad()
@@ -260,9 +272,12 @@ class DANNTrainer:
             total_domain_loss += domain_loss.item()
             num_batches += 1
         
+        avg_domain_acc = total_domain_correct / total_domain_samples if total_domain_samples > 0 else 0.0
+        
         return (total_loss / num_batches, 
                 total_class_loss / num_batches, 
-                total_domain_loss / num_batches)
+                total_domain_loss / num_batches,
+                avg_domain_acc)  # Add domain accuracy for monitoring
     
     @torch.no_grad()
     def evaluate(self, loader, criterion):

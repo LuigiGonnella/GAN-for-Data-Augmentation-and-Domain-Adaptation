@@ -186,10 +186,11 @@ def train_dann(
     )
     
     criterion_class = nn.CrossEntropyLoss()
-    criterion_domain = nn.BCELoss()
+    criterion_domain = nn.BCEWithLogitsLoss()  # More numerically stable than Sigmoid + BCELoss
     
     # Initialize DANN Trainer
     logger.info("Initializing DANN Trainer with gradient reversal...")
+    logger.info("Note: Using BCEWithLogitsLoss for improved numerical stability")
     trainer = DANNTrainer(model, device, output_dir=str(output_dir))
     
     # Training
@@ -207,6 +208,7 @@ def train_dann(
         'domain_loss': [],
         'total_loss': [],
         'lambda_values': [],
+        'domain_acc': [],  # Track domain discriminator accuracy
         'source_acc': [],
         'target_acc': [],
         'source_recall': [],
@@ -219,7 +221,7 @@ def train_dann(
         training_history['lambda_values'].append(lambda_adapt)
         
         # Train one epoch using DANNTrainer
-        avg_total_loss, avg_class_loss, avg_domain_loss = trainer.train_epoch(
+        avg_total_loss, avg_class_loss, avg_domain_loss, avg_domain_acc = trainer.train_epoch(
             source_train_loader, 
             target_loader, 
             optimizer,
@@ -231,6 +233,7 @@ def train_dann(
         training_history['class_loss'].append(avg_class_loss)
         training_history['domain_loss'].append(avg_domain_loss)
         training_history['total_loss'].append(avg_total_loss)
+        training_history['domain_acc'].append(avg_domain_acc)
         
         scheduler.step()
         
@@ -246,6 +249,7 @@ def train_dann(
         logger.info(f"\nEpoch [{epoch+1}/{num_epochs}]")
         logger.info(f"  Class Loss: {avg_class_loss:.4f}")
         logger.info(f"  Domain Loss: {avg_domain_loss:.4f}")
+        logger.info(f"  Domain Acc: {avg_domain_acc:.4f} (target: ~0.50 = perfect invariance)")
         logger.info(f"  Lambda: {lambda_adapt:.3f}")
         logger.info(f"  Source - Accuracy: {source_acc:.4f}, Recall: {source_recall:.4f}")
         logger.info(f"  Target - Accuracy: {target_acc:.4f}, Recall: {target_recall:.4f}")
