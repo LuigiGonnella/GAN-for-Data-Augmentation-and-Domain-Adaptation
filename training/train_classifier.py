@@ -206,7 +206,8 @@ def main(config=None):
     best_recall = 0.0
     best_f1 = 0.0  
 
-    patience = 3
+    # Adaptive patience based on model architecture
+    patience = 8 if config['model']['name'] == 'alexnet' else 3
     early_stopping_count = 0
 
     validation_losses_epochs = [] #contains losses after each batch

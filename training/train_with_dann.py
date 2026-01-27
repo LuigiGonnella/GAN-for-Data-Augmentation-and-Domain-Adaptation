@@ -205,8 +205,11 @@ def train_dann(
     logger.info(f"Training for {num_epochs} epochs with domain adversarial loss...")
     logger.info(f"Lambda schedule: Gradually increases from 0 to 1")
     logger.info(f"Model selection: Best model based on TARGET RECALL (sensitivity)")
+    logger.info(f"Early stopping: Patience of 8 epochs")
     
     best_target_recall = 0.0
+    patience = 8
+    early_stopping_count = 0
     training_history = {
         'class_loss': [],
         'domain_loss': [],
@@ -262,8 +265,16 @@ def train_dann(
         # Save best model based on target RECALL (most important for cancer detection)
         if target_recall > best_target_recall:
             best_target_recall = target_recall
+            early_stopping_count = 0
             torch.save(model.state_dict(), output_dir / 'best_dann_model.pth')
             logger.info(f"  ✓ New best target recall: {best_target_recall:.4f}")
+        else:
+            early_stopping_count += 1
+            
+        if early_stopping_count >= patience:
+            logger.info(f"\nEarly stopping triggered at epoch {epoch+1}")
+            logger.info(f"No improvement in target recall for {patience} epochs")
+            break
     
     logger.info(f"\nTraining completed. Best target recall: {best_target_recall:.4f}")
     logger.info(f"Model saved to: {output_dir / 'best_dann_model.pth'}")
