@@ -97,61 +97,83 @@ def preprocess(config):
     train_loader = DataLoader(train_dataset, batch_size=config['training']['params']['batch_size'], shuffle=True, num_workers=0)
     val_loader = DataLoader(val_dataset, batch_size=config['training']['params']['batch_size'], shuffle=False, num_workers=0)
 
-    model = Classifier(num_classes=2, model_name=config['model']['name'], pretrained=True)
+    pretrained = True if config['model']['pretrained'] else False
+    model = Classifier(num_classes=2, model_name=config['model']['name'], pretrained=pretrained)
 
     return train_loader, val_loader, model
 
 def define_strategy(config, model):
-    if not config['training']['layers']: #total freeze except last fcl
-        model.freeze_layers_except_last()
-        optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=config['training']['params']['lr'], weight_decay=config.get('weight_decay', 1e-5))
+    if config['training']['scratch']:
+        lr = config['training']['params']['lr']
+
+        if not config['training']['ht']:
+            optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=config.get('weight_decay', 1e-5))
+
+        elif (config['training']['params']['optimizer']=='SGD'):
+            optimizer = optim.SGD(model.parameters(), lr=lr, momentum=config['training']['params']['momentum'], weight_decay=config['training']['params']['weight_decay'])
+
+        elif (config['training']['params']['optimizer']=='Adam'):
+            optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=config['training']['params']['weight_decay'])
+
+        elif (config['training']['params']['optimizer']=='AdamW'):
+            optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=config['training']['params']['weight_decay'])
+        
+        elif (config['training']['params']['optimizer']=='RMSprop'):
+            optimizer = optim.RMSprop(model.parameters(), lr=lr, momentum=config['training']['params']['momentum'], weight_decay=config['training']['params']['weight_decay'])
+
+    elif not config['training']['layers']: #total freeze except last fcl
+            model.freeze_layers_except_last()
+            optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=config['training']['params']['lr'], weight_decay=config.get('weight_decay', 1e-5))
     
     elif not config['training']['ht']: #finetuning without hyperparameter tuning
         lr = config['training']['params']['lr']
         model.freeze_up_to_layer(layer_num=1)
         # Discriminative learning rates: lower for earlier layers, higher for later layers
-        optimizer = optim.Adam([
-            {'params': model.model.layer2.parameters(), 'lr': lr * 0.1},
-            {'params': model.model.layer3.parameters(), 'lr': lr * 0.3}, #progressive finetuning
-            {'params': model.model.layer4.parameters(), 'lr': lr * 0.5},
-            {'params': model.model.fc.parameters(), 'lr': lr}
-        ], lr=lr, weight_decay=config.get('weight_decay', 1e-5)) 
+        if 'resnet' in config['model']['name']:
+            optimizer = optim.Adam([
+                {'params': model.model.layer2.parameters(), 'lr': lr * 0.1},
+                {'params': model.model.layer3.parameters(), 'lr': lr * 0.3},
+                {'params': model.model.layer4.parameters(), 'lr': lr * 0.5},
+                {'params': model.model.fc.parameters(), 'lr': lr}
+            ], lr=lr, weight_decay=config.get('weight_decay', 1e-5))
+        elif config['model']['name'] == 'alexnet':
+            # AlexNet: progressive unfreezing with discriminative LR
+            optimizer = optim.Adam([
+                {'params': model.model.features[3:].parameters(), 'lr': lr * 0.3},
+                {'params': model.model.classifier[:6].parameters(), 'lr': lr * 0.5},
+                {'params': model.model.classifier[6].parameters(), 'lr': lr}
+            ], lr=lr, weight_decay=config.get('weight_decay', 1e-5))
 
     else: #finetuning with hyperparameter tuning
         model.freeze_up_to_layer(layer_num=1)
         lr = config['training']['params']['lr']
+        
+        # Define parameter groups based on architecture
+        if 'resnet' in config['model']['name']:
+            param_groups = [
+                {'params': model.model.layer2.parameters(), 'lr': lr * 0.1},
+                {'params': model.model.layer3.parameters(), 'lr': lr * 0.3},
+                {'params': model.model.layer4.parameters(), 'lr': lr * 0.5},
+                {'params': model.model.fc.parameters(), 'lr': lr}
+            ]
+        elif config['model']['name'] == 'alexnet':
+            param_groups = [
+                {'params': model.model.features[3:].parameters(), 'lr': lr * 0.3},
+                {'params': model.model.classifier[:6].parameters(), 'lr': lr * 0.5},
+                {'params': model.model.classifier[6].parameters(), 'lr': lr}
+            ]
 
         if (config['training']['params']['optimizer']=='SGD'):
-            optimizer = optim.SGD([
-                {'params': model.model.layer2.parameters(), 'lr': lr * 0.1},
-                {'params': model.model.layer3.parameters(), 'lr': lr * 0.3}, #progressive finetuning
-                {'params': model.model.layer4.parameters(), 'lr': lr * 0.5},
-                {'params': model.model.fc.parameters(), 'lr': lr}
-            ], lr=lr, momentum=config['training']['params']['momentum'], weight_decay=config['training']['params']['weight_decay'])
+            optimizer = optim.SGD(param_groups, lr=lr, momentum=config['training']['params']['momentum'], weight_decay=config['training']['params']['weight_decay'])
 
         elif (config['training']['params']['optimizer']=='Adam'):
-            optimizer = optim.Adam([
-                {'params': model.model.layer2.parameters(), 'lr': lr * 0.1},
-                {'params': model.model.layer3.parameters(), 'lr': lr * 0.3}, #progressive finetuning
-                {'params': model.model.layer4.parameters(), 'lr': lr * 0.5},
-                {'params': model.model.fc.parameters(), 'lr': lr}
-            ], lr=lr, weight_decay=config['training']['params']['weight_decay'])
+            optimizer = optim.Adam(param_groups, lr=lr, weight_decay=config['training']['params']['weight_decay'])
 
         elif (config['training']['params']['optimizer']=='AdamW'):
-            optimizer = optim.AdamW([
-                {'params': model.model.layer2.parameters(), 'lr': lr * 0.1},
-                {'params': model.model.layer3.parameters(), 'lr': lr * 0.3}, #progressive finetuning
-                {'params': model.model.layer4.parameters(), 'lr': lr * 0.5},
-                {'params': model.model.fc.parameters(), 'lr': lr}
-            ], lr=lr, weight_decay=config['training']['params']['weight_decay'])
+            optimizer = optim.AdamW(param_groups, lr=lr, weight_decay=config['training']['params']['weight_decay'])
         
         elif (config['training']['params']['optimizer']=='RMSprop'):
-            optimizer = optim.RMSprop([
-                {'params': model.model.layer2.parameters(), 'lr': lr * 0.1},
-                {'params': model.model.layer3.parameters(), 'lr': lr * 0.3}, #progressive finetuning
-                {'params': model.model.layer4.parameters(), 'lr': lr * 0.5},
-                {'params': model.model.fc.parameters(), 'lr': lr}
-            ], lr=lr, momentum=config['training']['params']['momentum'], weight_decay=config['training']['params']['weight_decay'])
+            optimizer = optim.RMSprop(param_groups, lr=lr, momentum=config['training']['params']['momentum'], weight_decay=config['training']['params']['weight_decay'])
     
     return optimizer
 

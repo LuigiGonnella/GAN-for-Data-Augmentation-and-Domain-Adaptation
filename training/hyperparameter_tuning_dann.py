@@ -38,7 +38,7 @@ PARAM_DISTRIBUTION = {
 
 N_ITERATIONS = 10  # Number of random search iterations
 TUNING_EPOCHS = 5  # Quick epochs for hyperparameter evaluation
-BEST_CONFIG_EPOCHS = 30  # Full training with best config
+BEST_CONFIG_EPOCHS = 50  # Full training with best config
 
 
 def train_dann_with_hyperparams(hyperparams, config_path, 

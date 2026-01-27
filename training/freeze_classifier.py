@@ -9,7 +9,7 @@ from train_classifier import main as train_main
 
 def run_baseline(config_path):
 
-    print("BASELINE DATASET TRAINING - all layer freezed except for FCL head")
+    print("BASELINE MODEL (freezing for resnet) TRAINING")
     
     try:
         with open(config_path, 'r') as f:
@@ -18,17 +18,17 @@ def run_baseline(config_path):
         
         metrics = train_main(config)
         
-        print("BASELINE COMPLETED")
+        print("✓ TRAINING COMPLETED")
         
         return metrics
     
     except Exception as e:
-        print(f'Error with file name experiments/classifier_baseline_freeze.yaml: {e}')
+        print(f'Error with file name {config_path}: {e}')
         return None
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
-        description='BASELINE DATASET TRAINING - all layer freezed except for FCL head'
+        description='BASELINE DATASET TRAINING'
     )
     parser.add_argument(
         '--config', 

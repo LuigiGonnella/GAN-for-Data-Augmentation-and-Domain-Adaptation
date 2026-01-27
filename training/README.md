@@ -10,3 +10,7 @@ python scripts/prepare_domain_adaptation_data.py --baseline-dir data/processed/b
 
 Step 2: Run Baseline Domain Shift Evaluation
 python training/baseline_classifier_domain_eval.py --config experiments/domain_shift_eval.yaml
+
+
+pipeline_classifier.py WORKFLOW:
+python training/pipeline_classifier.py --data_type baseline --model alexnet

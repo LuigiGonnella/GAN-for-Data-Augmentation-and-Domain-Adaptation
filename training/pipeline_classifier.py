@@ -1,4 +1,4 @@
-import sys
+﻿import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -12,38 +12,57 @@ import os
 from config.utils import load_config
 import argparse
 
-def run_full_pipeline(mode, data_type):
+def run_full_pipeline(mode, data_type, model='resnet'):
     
-    # STEP 0: Freezing
-    print("# STEP 0: Baseline Training (freeze)")
-
-    baseline_metrics = run_baseline(f"experiments/classifier_{data_type}_freeze.yaml")
-    
-    print(f"\n✓ Baseline completed.\nResults:{baseline_metrics}")
-
-    # STEP 1: Fine-Tuning 
-    print("# STEP 1: Fine-Tuning")
-
-    
-    finetune_results = run_fine_tuning(f"experiments/classifier_{data_type}_ft.yaml")
-    
-    print(f"\n✓ Fine-tuning completed.\nResults:{finetune_results}")
-    
-    if mode=='ht':
-        # STEP 2: Fine-Tuning and Hyperparameter Tuning 
-        print("# STEP 2: Hyperparameter Tuning with Best Strategy")
+    if model == 'resnet':
+        # Standard ResNet pipeline: freeze -> finetune -> hyperparameter tuning
         
-        best_config, tuning_results = run_best_config(f"experiments/classifier_{data_type}_ft_ht.yaml")
+        # STEP 0: Freezing
+        print("# STEP 0: Baseline Training (freeze)")
+        baseline_metrics = run_baseline(f"experiments/classifier_{data_type}_freeze.yaml")
+        print(f"\n✓ Baseline completed.\nResults:{baseline_metrics}")
+
+        # STEP 1: Fine-Tuning 
+        print("# STEP 1: Fine-Tuning")
+        finetune_results = run_fine_tuning(f"experiments/classifier_{data_type}_ft.yaml")
+        print(f"\n✓ Fine-tuning completed.\nResults:{finetune_results}")
         
-        print(f"✓ Hyperparameter tuning completed.\nFinal test metrics: {tuning_results}\n")
-        print(f'BEST CONFIGURATION:\n{best_config}')
+        if mode=='ht':
+            # STEP 2: Fine-Tuning and Hyperparameter Tuning 
+            print("# STEP 2: Hyperparameter Tuning with Best Strategy")
+            best_config, tuning_results = run_best_config(f"experiments/classifier_{data_type}_ft_ht.yaml")
+            print(f"✓ Hyperparameter tuning completed.\nFinal test metrics: {tuning_results}\n")
+            print(f'BEST CONFIGURATION:\n{best_config}')
+        else:
+            best_config, tuning_results = False, False
+    
+    elif model == 'alexnet':
+        # AlexNet pipeline: train from scratch -> hyperparameter tuning (skip freeze and finetune)
+        
+        # STEP 0: Training from Scratch
+        print("# STEP 0: Training AlexNet from Scratch")
+        baseline_metrics = run_baseline(f"experiments/scartch_classifier_{data_type}.yaml")
+        print(f"\n✓ Training from scratch completed.\nResults:{baseline_metrics}")
+        
+        # Skip finetuning step for AlexNet
+        finetune_results = None
+        
+        if mode=='ht':
+            # STEP 1: Hyperparameter Tuning from Scratch
+            print("# STEP 1: Hyperparameter Tuning with Training from Scratch")
+            best_config, tuning_results = run_best_config(f"experiments/scartch_classifier_{data_type}_ht.yaml")
+            print(f"✓ Hyperparameter tuning completed.\nFinal test metrics: {tuning_results}\n")
+            print(f'BEST CONFIGURATION:\n{best_config}')
+        else:
+            best_config, tuning_results = False, False
+    
     else:
-        best_config, tuning_results = False, False
+        raise ValueError(f"Invalid model '{model}'. Must be 'resnet' or 'alexnet'.")
     
-    # STEP 3: Final Report
-    print("# STEP 3: Final Report")
+    # FINAL STEP: Final Report
+    print("# FINAL STEP: Final Report")
     
-    generate_final_report(baseline_metrics, finetune_results, tuning_results, best_config, data_type)
+    generate_final_report(baseline_metrics, finetune_results, tuning_results, best_config, data_type, model)
     
     print("PIPELINE COMPLETED SUCCESSFULLY!")
     print(f"End time: {datetime.now()}")
@@ -51,7 +70,7 @@ def run_full_pipeline(mode, data_type):
 
 
 FINAL_METRICS = "Final Metrics:\n"
-def generate_final_report(baseline_metrics, finetune_results, tuning_results, best_config, data_type):
+def generate_final_report(baseline_metrics, finetune_results, tuning_results, best_config, data_type, model='resnet'):
     # --- Generate improved image report with graphs and schemas ---
     report_dir = f"results/classifier_on_{data_type}/final_report"
     os.makedirs(report_dir, exist_ok=True)
@@ -60,14 +79,21 @@ def generate_final_report(baseline_metrics, finetune_results, tuning_results, be
         import seaborn as sns
         import pandas as pd
         # Prepare metrics for each step
-        steps = ['Baseline', 'Fine-tuned', 'Hyperparam Tuned']
+        if model == 'alexnet':
+            steps = ['Scratch', 'Hyperparam Tuned']
+            values = [
+                [baseline_metrics['accuracy'], baseline_metrics['precision'], baseline_metrics['recall'], baseline_metrics['f1'], baseline_metrics['roc_auc'], baseline_metrics['val_loss']],
+                [tuning_results['accuracy'], tuning_results['precision'], tuning_results['recall'], tuning_results['f1'], tuning_results['roc_auc'], tuning_results['val_loss']] if tuning_results is not False and best_config is not False else None
+            ]
+        else:  # resnet
+            steps = ['Baseline', 'Fine-tuned', 'Hyperparam Tuned']
+            values = [
+                [baseline_metrics['accuracy'], baseline_metrics['precision'], baseline_metrics['recall'], baseline_metrics['f1'], baseline_metrics['roc_auc'], baseline_metrics['val_loss']],
+                [finetune_results['accuracy'], finetune_results['precision'], finetune_results['recall'], finetune_results['f1'], finetune_results['roc_auc'], finetune_results['val_loss']] if finetune_results else None,
+                [tuning_results['accuracy'], tuning_results['precision'], tuning_results['recall'], tuning_results['f1'], tuning_results['roc_auc'], tuning_results['val_loss']] if tuning_results is not False and best_config is not False else None
+            ]
+        
         metrics = ['accuracy', 'precision', 'recall', 'f1', 'roc_auc', 'val_loss']
-        values = [
-            [baseline_metrics['accuracy'], baseline_metrics['precision'], baseline_metrics['recall'], baseline_metrics['f1'], baseline_metrics['roc_auc'], baseline_metrics['val_loss']],
-            [finetune_results['accuracy'], finetune_results['precision'], finetune_results['recall'], finetune_results['f1'], finetune_results['roc_auc'], finetune_results['val_loss']],
-            [tuning_results['accuracy'], tuning_results['precision'], tuning_results['recall'], tuning_results['f1'], tuning_results['roc_auc'], tuning_results['val_loss']] if tuning_results is not False and best_config is not False else None
-        ]
-
         df = pd.DataFrame([x for x in values if x is not None], columns=metrics, index=[s for s, v in zip(steps, values) if v is not None])
         
         # Set up figure with optimized spacing
@@ -111,33 +137,60 @@ def generate_final_report(baseline_metrics, finetune_results, tuning_results, be
         # Improvement summary - spans rows 1 and 2 in column 1
         ax3 = fig.add_subplot(gs[1:, 1])
         ax3.axis('off')
-        improvement_finetune_f1 = (finetune_results['f1'] - baseline_metrics['f1']) / baseline_metrics['f1'] * 100
-        improvement_final_f1 = (tuning_results['f1'] - baseline_metrics['f1']) / baseline_metrics['f1'] * 100 if tuning_results else None
-
-        improvement_finetune_recall = (finetune_results['recall'] - baseline_metrics['recall']) / baseline_metrics['recall'] * 100
-        improvement_final_recall = (tuning_results['recall'] - baseline_metrics['recall']) / baseline_metrics['recall'] * 100 if tuning_results else None
-
-        summary_text_f1 = (
-            f"F1 Score Improvement:\n"
-            f"- Baseline: {baseline_metrics['f1']:.4f}\n"
-            f"- Fine-tuned: {finetune_results['f1']:.4f} ({improvement_finetune_f1:+.2f}%)\n"
-        )
-        if tuning_results:
-            summary_text_f1 += f"- Hyperparam Tuned: {tuning_results['f1']:.4f} ({improvement_final_f1:+.2f}%)\n\n"
+        
+        if model == 'alexnet':
+            # For AlexNet: compare scratch vs hyperparameter tuned
+            improvement_final_f1 = (tuning_results['f1'] - baseline_metrics['f1']) / baseline_metrics['f1'] * 100 if tuning_results else None
+            improvement_final_recall = (tuning_results['recall'] - baseline_metrics['recall']) / baseline_metrics['recall'] * 100 if tuning_results else None
+            
+            summary_text_f1 = (
+                f"F1 Score Improvement:\n"
+                f"- Scratch: {baseline_metrics['f1']:.4f}\n"
+            )
+            if tuning_results:
+                summary_text_f1 += f"- Hyperparam Tuned: {tuning_results['f1']:.4f} ({improvement_final_f1:+.2f}%)\n\n"
+            else:
+                summary_text_f1 += "- Hyperparam Tuned: No Hyperparameter Tuning performed\n\n"
+            
+            summary_text_recall = (
+                f"Recall Improvement:\n"
+                f"- Scratch: {baseline_metrics['recall']:.4f}\n"
+            )
+            if tuning_results:
+                summary_text_recall += f"- Hyperparam Tuned: {tuning_results['recall']:.4f} ({improvement_final_recall:+.2f}%)\n"
+            else:
+                summary_text_recall += "- Hyperparam Tuned: No Hyperparameter Tuning performed\n"
         else:
-            summary_text_f1 += "- Hyperparam Tuned: No Hyperparameter Tuning performed\n\n"
+            # For ResNet: compare baseline -> finetune -> hyperparameter tuned
+            improvement_finetune_f1 = (finetune_results['f1'] - baseline_metrics['f1']) / baseline_metrics['f1'] * 100 if finetune_results else 0
+            improvement_final_f1 = (tuning_results['f1'] - baseline_metrics['f1']) / baseline_metrics['f1'] * 100 if tuning_results else None
+
+            improvement_finetune_recall = (finetune_results['recall'] - baseline_metrics['recall']) / baseline_metrics['recall'] * 100 if finetune_results else 0
+            improvement_final_recall = (tuning_results['recall'] - baseline_metrics['recall']) / baseline_metrics['recall'] * 100 if tuning_results else None
+
+            summary_text_f1 = (
+                f"F1 Score Improvement:\n"
+                f"- Baseline: {baseline_metrics['f1']:.4f}\n"
+            )
+            if finetune_results:
+                summary_text_f1 += f"- Fine-tuned: {finetune_results['f1']:.4f} ({improvement_finetune_f1:+.2f}%)\n"
+            if tuning_results:
+                summary_text_f1 += f"- Hyperparam Tuned: {tuning_results['f1']:.4f} ({improvement_final_f1:+.2f}%)\n\n"
+            else:
+                summary_text_f1 += "- Hyperparam Tuned: No Hyperparameter Tuning performed\n\n"
+
+            summary_text_recall = (
+                f"Recall Improvement:\n"
+                f"- Baseline: {baseline_metrics['recall']:.4f}\n"
+            )
+            if finetune_results:
+                summary_text_recall += f"- Fine-tuned: {finetune_results['recall']:.4f} ({improvement_finetune_recall:+.2f}%)\n"
+            if tuning_results:
+                summary_text_recall += f"- Hyperparam Tuned: {tuning_results['recall']:.4f} ({improvement_final_recall:+.2f}%)\n"
+            else:
+                summary_text_recall += "- Hyperparam Tuned: No Hyperparameter Tuning performed\n"
+        
         ax3.text(0, 0.95, summary_text_f1, fontsize=11, va='top', ha='left', wrap=True)
-
-        # Add recall improvement summary in the same subplot
-        summary_text_recall = (
-            f"Recall Improvement:\n"
-            f"- Baseline: {baseline_metrics['recall']:.4f}\n"
-            f"- Fine-tuned: {finetune_results['recall']:.4f} ({improvement_finetune_recall:+.2f}%)\n"
-        )
-        if tuning_results:
-            summary_text_recall += f"- Hyperparam Tuned: {tuning_results['recall']:.4f} ({improvement_final_recall:+.2f}%)\n"
-        else:
-            summary_text_recall += "- Hyperparam Tuned: No Hyperparameter Tuning performed\n"
         ax3.text(0, 0.45, summary_text_recall, fontsize=11, va='top', ha='left', wrap=True)
 
         # Save image
@@ -157,24 +210,32 @@ def generate_final_report(baseline_metrics, finetune_results, tuning_results, be
     # Write text report
     with open(report_path, 'w') as f:
         f.write("FINAL OPTIMIZATION REPORT\n")
-        f.write("STEP 0: BASELINE TRAINING (freeze)\n")
+        f.write(f"Model: {model.upper()}\n\n")
+        
+        if model == 'alexnet':
+            f.write("STEP 0: TRAINING FROM SCRATCH\n")
+        else:
+            f.write("STEP 0: BASELINE TRAINING (freeze)\n")
         f.write(f"  - Accuracy: {baseline_metrics['accuracy']:.4f}\n")
         f.write(f"  - Precision: {baseline_metrics['precision']:.4f}\n")
         f.write(f"  - Recall: {baseline_metrics['recall']:.4f}\n")
         f.write(f"  - F1-Score: {baseline_metrics['f1']:.4f}\n")
         f.write(f"  - ROC-AUC: {baseline_metrics['roc_auc']:.4f}\n")
         f.write(f"  - Val Loss: {baseline_metrics['val_loss']:.4f}\n\n")
-        f.write("STEP 1: FINE-TUNING\n")
-        f.write(FINAL_METRICS)
-        f.write(f"  - Accuracy: {finetune_results['accuracy']:.4f}\n")
-        f.write(f"  - Precision: {finetune_results['precision']:.4f}\n")
-        f.write(f"  - Recall: {finetune_results['recall']:.4f}\n")
-        f.write(f"  - F1-Score: {finetune_results['f1']:.4f}\n")
-        f.write(f"  - ROC-AUC: {finetune_results['roc_auc']:.4f}\n")
-        f.write(f"  - Val Loss: {finetune_results['val_loss']:.4f}\n\n")
+        
+        if finetune_results:
+            f.write("STEP 1: FINE-TUNING\n")
+            f.write(FINAL_METRICS)
+            f.write(f"  - Accuracy: {finetune_results['accuracy']:.4f}\n")
+            f.write(f"  - Precision: {finetune_results['precision']:.4f}\n")
+            f.write(f"  - Recall: {finetune_results['recall']:.4f}\n")
+            f.write(f"  - F1-Score: {finetune_results['f1']:.4f}\n")
+            f.write(f"  - ROC-AUC: {finetune_results['roc_auc']:.4f}\n")
+            f.write(f"  - Val Loss: {finetune_results['val_loss']:.4f}\n\n")
 
         if best_config is not False:
-            f.write("STEP 2: HYPERPARAMETER TUNING\n")
+            step_num = "STEP 1" if model == 'alexnet' else "STEP 2"
+            f.write(f"{step_num}: HYPERPARAMETER TUNING\n")
             f.write(f"Best hyperparameter configuration:\n{best_config}\n")
             f.write(FINAL_METRICS)
             f.write(f"  - Accuracy: {float(tuning_results['accuracy']):.4f}\n")
@@ -183,23 +244,32 @@ def generate_final_report(baseline_metrics, finetune_results, tuning_results, be
             f.write(f"  - F1-Score: {float(tuning_results['f1']):.4f}\n")
             f.write(f"  - ROC-AUC: {float(tuning_results['roc_auc']):.4f}\n")
             f.write(f"  - Validation Loss: {float(tuning_results['val_loss']):.4f}\n\n")
-            f.write("COMPARISON: Baseline vs Fine-tuned vs Fine Tuned and Hyperparameter Tuned\n")
+            
+            if model == 'alexnet':
+                f.write("COMPARISON: Scratch vs Hyperparameter Tuned\n")
+            else:
+                f.write("COMPARISON: Baseline vs Fine-tuned vs Fine Tuned and Hyperparameter Tuned\n")
             improvement_final_f1 = (float(tuning_results['f1']) - baseline_metrics['f1']) / baseline_metrics['f1'] * 100
             improvement_final_recall = (float(tuning_results['recall']) - baseline_metrics['recall']) / baseline_metrics['recall'] * 100
 
-        improvement_finetune_f1 = (finetune_results['f1'] - baseline_metrics['f1']) / baseline_metrics['f1'] * 100
-        improvement_finetune_recall = (finetune_results['recall'] - baseline_metrics['recall']) / baseline_metrics['recall'] * 100
-        f.write(f"Baseline F1: {baseline_metrics['f1']:.4f}\n")
-        f.write(f"Fine Tune F1: {finetune_results['f1']:.4f} ({improvement_finetune_f1:+.2f}%)\n")
+        if finetune_results:
+            improvement_finetune_f1 = (finetune_results['f1'] - baseline_metrics['f1']) / baseline_metrics['f1'] * 100
+            improvement_finetune_recall = (finetune_results['recall'] - baseline_metrics['recall']) / baseline_metrics['recall'] * 100
+        
+        initial_label = "Scratch" if model == 'alexnet' else "Baseline"
+        f.write(f"{initial_label} F1: {baseline_metrics['f1']:.4f}\n")
+        if finetune_results:
+            f.write(f"Fine Tune F1: {finetune_results['f1']:.4f} ({improvement_finetune_f1:+.2f}%)\n")
         if best_config is not False:
             f.write(f"  After Hyperparameter Tuning F1: {float(tuning_results['f1']):.4f} ({improvement_final_f1:+.2f}%)\n")
-        f.write(f"Baseline Recall: {baseline_metrics['recall']:.4f}\n")
-        f.write(f"Fine Tune Recall: {finetune_results['recall']:.4f} ({improvement_finetune_recall:+.2f}%)\n")
+        f.write(f"{initial_label} Recall: {baseline_metrics['recall']:.4f}\n")
+        if finetune_results:
+            f.write(f"Fine Tune Recall: {finetune_results['recall']:.4f} ({improvement_finetune_recall:+.2f}%)\n")
         if best_config is not False:
             f.write(f"  After Hyperparameter Tuning Recall: {float(tuning_results['recall']):.4f} ({improvement_final_recall:+.2f}%)\n")
 
         if best_config is not False:
-            f.write("Best hyperparameter configuration:\n")
+            f.write("\nBest hyperparameter configuration:\n")
             f.write(f"  - Learning Rate: {best_config['lr']}\n")
             f.write(f"  - Batch Size: {best_config['batch_size']}\n")
             f.write(f"  - Weight Decay: {best_config['weight_decay']}\n")
@@ -249,12 +319,21 @@ if __name__ == '__main__':
         '--data_type', 
         type=str, 
         required=True,
-        help='Data type to train the classifier on'
+        help='Data type to train the classifier on (baseline or augmented)'
+    )
+
+    parser.add_argument(
+        '--model',
+        type=str,
+        default='resnet',
+        choices=['resnet', 'alexnet'],
+        help='Model architecture to use (resnet or alexnet). Default: resnet'
     )
 
     parser.add_argument(
         '--no_ht',
-        help='Run hyperparameter tuning and finetuning'
+        action='store_true',
+        help='Skip hyperparameter tuning step'
     )
 
     args = parser.parse_args()
@@ -267,11 +346,8 @@ if __name__ == '__main__':
     mode = 'no_ht' if args.no_ht else 'ht'
 
     data_type = args.data_type
+    model = args.model
 
-    print(f'RUNNING PIPELINE WITH MODE: {mode} and DATA TYPE: {data_type}\n')
+    print(f'RUNNING PIPELINE WITH MODE: {mode}, DATA TYPE: {data_type}, and MODEL: {model}\n')
     
-    run_full_pipeline(mode, data_type)
-    
-    
-
-    
+    run_full_pipeline(mode, data_type, model)
