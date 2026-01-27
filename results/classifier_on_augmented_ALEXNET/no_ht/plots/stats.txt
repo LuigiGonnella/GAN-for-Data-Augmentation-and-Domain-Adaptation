@@ -1,0 +1,7 @@
+Optimal Threshold: 0.2190
+
+Validation Performance:
+  Accuracy: 0.8518, Recall: 0.5067, Precision: 0.3979, F1: 0.4457
+
+Test Performance:
+  Accuracy: 0.8498, Recall: 0.4833, Precision: 0.3887, F1: 0.4309
