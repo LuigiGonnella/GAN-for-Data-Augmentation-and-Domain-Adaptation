@@ -17,6 +17,7 @@ Goal: Improve performance on target domain by learning features that work
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
 from torch.autograd import Function
 from torchvision import transforms, datasets
@@ -179,10 +180,13 @@ def train_dann(
         weight_decay=config['training'].get('weight_decay', 1e-5)
     )
     
-    scheduler = optim.lr_scheduler.StepLR(
+    scheduler = ReduceLROnPlateau(
         optimizer,
-        step_size=config['training'].get('scheduler_step', 10),
-        gamma=config['training'].get('scheduler_gamma', 0.1)
+        mode='min',
+        factor=0.5,
+        patience=5,
+        min_lr=1e-6,
+        cooldown=1
     )
     
     criterion_class = nn.CrossEntropyLoss()
@@ -235,11 +239,12 @@ def train_dann(
         training_history['total_loss'].append(avg_total_loss)
         training_history['domain_acc'].append(avg_domain_acc)
         
-        scheduler.step()
-        
         # Evaluate using DANNTrainer's evaluate method
         _, source_acc, source_recall = trainer.evaluate(source_eval_loader, criterion_class)
         _, target_acc, target_recall = trainer.evaluate(target_eval_loader, criterion_class)
+        
+        # Step scheduler based on class loss
+        scheduler.step(avg_class_loss)
         
         training_history['source_acc'].append(source_acc)
         training_history['target_acc'].append(target_acc)

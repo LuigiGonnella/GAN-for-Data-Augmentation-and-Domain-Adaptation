@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms, datasets
 import yaml
@@ -103,6 +104,8 @@ def preprocess(config):
     return train_loader, val_loader, model
 
 def define_strategy(config, model):
+    scheduler = None
+    
     if config['training']['scratch']:
         lr = config['training']['params']['lr']
 
@@ -120,6 +123,10 @@ def define_strategy(config, model):
         
         elif (config['training']['params']['optimizer']=='RMSprop'):
             optimizer = optim.RMSprop(model.parameters(), lr=lr, momentum=config['training']['params']['momentum'], weight_decay=config['training']['params']['weight_decay'])
+        
+        # Add scheduler for AlexNet training from scratch
+        if config['model']['name'] == 'alexnet':
+            scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5, min_lr=1e-5, cooldown=1)
 
     elif not config['training']['layers']: #total freeze except last fcl
             model.freeze_layers_except_last()
@@ -175,7 +182,7 @@ def define_strategy(config, model):
         elif (config['training']['params']['optimizer']=='RMSprop'):
             optimizer = optim.RMSprop(param_groups, lr=lr, momentum=config['training']['params']['momentum'], weight_decay=config['training']['params']['weight_decay'])
     
-    return optimizer
+    return optimizer, scheduler
 
 def main(config=None):
 
@@ -185,7 +192,7 @@ def main(config=None):
     
     #---------- STRATEGY ----------
 
-    optimizer = define_strategy(config, model)
+    optimizer, scheduler = define_strategy(config, model)
 
     #---------- TRAINING ---------- 
     #we use DEFAULT THRESHOLD 0.5 to classify images
@@ -266,6 +273,10 @@ def main(config=None):
 
         print(f"Epoch {epoch+1}/{config['training']['params']['epochs']}, Train Loss: {train_loss:.4f}, Accuracy: {train_accuracy:.4f}, Recall: {train_recall:.4f}, Precision: {train_precision:.4f}, F1: {train_f1:.4f}, ROC-AUC: {train_roc_auc:.4f}")
         print(f"Epoch {epoch+1}/{config['training']['params']['epochs']}, Val Loss: {val_loss:.4f}, Accuracy: {accuracy:.4f}, Recall: {recall:.4f}, Precision: {precision:.4f}, F1: {f1:.4f}, ROC-AUC: {roc_auc:.4f}")
+        
+        # Step scheduler if it exists (AlexNet training from scratch)
+        if scheduler is not None:
+            scheduler.step(val_loss)
         
         if recall > best_recall:
             early_stopping_count = 0
