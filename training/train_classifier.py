@@ -216,7 +216,7 @@ def main(config=None):
     train_accuracy_epochs = []
     validation_accuracy_epochs = []
 
-    init_epochs = 5 if config['model']['training']['scratch'] else 1
+    init_epochs = 3 if config['model']['training']['scratch'] else 0
     
     for epoch in range(config['training']['params']['epochs']):
         print(f"\nStarting epoch {epoch+1}/{config['training']['params']['epochs']}...")

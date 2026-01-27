@@ -186,7 +186,7 @@ def train_dann(
     num_epochs = config['training']['num_epochs']
     logger.info(f"Training for {num_epochs} epochs with domain adversarial loss...")
     logger.info(f"Lambda schedule: Gradually increases from 0 to 1")
-    logger.info(f"Model selection: Best model based on TARGET RECALL (sensitivity)")
+    logger.info(f"Model selection: Best TARGET RECALL with min accuracy threshold (>30%)")
     logger.info(f"Early stopping: Patience of 15 epochs")
     
     best_target_recall = -1.0
@@ -204,7 +204,7 @@ def train_dann(
         'target_recall': []
     }
 
-    init_epochs = 5
+    init_epochs = 3
     
     for epoch in range(num_epochs):
         # Compute adaptive lambda using DANNTrainer's method
@@ -246,12 +246,17 @@ def train_dann(
         logger.info(f"  Source - Accuracy: {source_acc:.4f}, Recall: {source_recall:.4f}")
         logger.info(f"  Target - Accuracy: {target_acc:.4f}, Recall: {target_recall:.4f}")
         
-        # Save best model based on target RECALL (most important for cancer detection)
+        # Save best model based on target RECALL with minimum accuracy threshold
+        # This prevents pathological models (recall=1.0, accuracy=0.13)
         if target_recall > best_target_recall and epoch > init_epochs:
-            best_target_recall = target_recall
-            early_stopping_count = 0
-            torch.save(model.state_dict(), output_dir / 'best_dann_model.pth')
-            logger.info(f"  ✓ New best target recall: {best_target_recall:.4f}")
+            if target_acc > 0.30:
+                best_target_recall = target_recall
+                early_stopping_count = 0
+                torch.save(model.state_dict(), output_dir / 'best_dann_model.pth')
+                logger.info(f"  ✓ New best target recall: {best_target_recall:.4f} (acc={target_acc:.4f})")
+            else:
+                logger.info(f"  ⚠ Recall improved ({target_recall:.4f}) but accuracy too low ({target_acc:.4f} < 0.30)")
+                early_stopping_count += 1
         else:
             early_stopping_count += 1
             
