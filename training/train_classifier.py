@@ -70,8 +70,7 @@ def preprocess(config):
 
     # Training transforms with data augmentation to prevent overfitting
     train_transform = transforms.Compose([
-        transforms.Resize((256, 256)),  # Resize larger for random crop
-        transforms.RandomResizedCrop(224, scale=(0.9, 1.0)),  # Conservative crop preserving lesion boundaries
+        transforms.Resize((224, 224)),  
         transforms.RandomHorizontalFlip(p=0.5),
         transforms.RandomVerticalFlip(p=0.5),
         transforms.RandomRotation(degrees=20),

@@ -79,8 +79,7 @@ def train_dann(
     
     # Transforms
     train_transform = transforms.Compose([
-        transforms.Resize((256, 256)),
-        transforms.RandomResizedCrop(224, scale=(0.9, 1.0)),
+        transforms.Resize((224, 224)),
         transforms.RandomHorizontalFlip(p=0.5),
         transforms.RandomVerticalFlip(p=0.5),
         transforms.RandomRotation(degrees=15),

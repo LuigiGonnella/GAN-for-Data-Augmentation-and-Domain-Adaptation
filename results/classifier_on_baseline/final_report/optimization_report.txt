@@ -1,50 +1,61 @@
 FINAL OPTIMIZATION REPORT
 STEP 0: BASELINE TRAINING (freeze)
-  - Accuracy: 0.8694
-  - Precision: 0.4606
-  - Recall: 0.6433
-  - F1-Score: 0.5369
-  - ROC-AUC: 0.8810
-  - Val Loss: 0.2485
+  - Accuracy: 0.8620
+  - Precision: 0.4290
+  - Recall: 0.5233
+  - F1-Score: 0.4715
+  - ROC-AUC: 0.8441
+  - Val Loss: 0.2823
 
 STEP 1: FINE-TUNING
 Final Metrics:
-  - Accuracy: 0.8592
-  - Precision: 0.4470
-  - Recall: 0.8300
-  - F1-Score: 0.5811
-  - ROC-AUC: 0.9327
-  - Val Loss: 0.2299
+  - Accuracy: 0.8800
+  - Precision: 0.4933
+  - Recall: 0.7400
+  - F1-Score: 0.5920
+  - ROC-AUC: 0.9190
+  - Val Loss: 0.2268
 
 STEP 2: HYPERPARAMETER TUNING
 Best hyperparameter configuration:
-{'learning_rate': 0.0001, 'batch_size': 64, 'weight_decay': 1e-05, 'momentum': 0.9, 'optimizer': 'Adam', 'accuracy': 0.92, 'precision': 0.6804511278195489, 'recall': 0.6033333333333334, 'f1': 0.6395759717314488, 'roc_auc': 0.9242651851851852, 'val_loss': 0.2370842636683408}
+weight_decay         0.001
+batch_size              64
+lr                     0.1
+momentum              0.95
+optimizer          RMSprop
+accuracy           0.24902
+recall                0.97
+precision         0.132453
+f1                 0.23308
+roc_auc           0.564637
+val_loss        586.656128
+Name: 8, dtype: object
 Final Metrics:
-  - Accuracy: 0.9200
-  - Precision: 0.6805
-  - Recall: 0.6033
-  - F1-Score: 0.6396
-  - ROC-AUC: 0.9243
-  - Validation Loss: 0.2371
+  - Accuracy: 0.2388
+  - Precision: 0.1312
+  - Recall: 0.9733
+  - F1-Score: 0.2313
+  - ROC-AUC: 0.5566
+  - Validation Loss: 598.9334
 
 COMPARISON: Baseline vs Fine-tuned vs Fine Tuned and Hyperparameter Tuned
-Baseline F1: 0.5369
-Fine Tune F1: 0.5811 (+8.24%)
-  After Hyperparameter Tuning F1: 0.6396 (+19.13%)
-Baseline Recall: 0.6433
-Fine Tune Recall: 0.8300 (+29.02%)
-  After Hyperparameter Tuning Recall: 0.6033 (-6.22%)
+Baseline F1: 0.4715
+Fine Tune F1: 0.5920 (+25.56%)
+  After Hyperparameter Tuning F1: 0.2313 (-50.94%)
+Baseline Recall: 0.5233
+Fine Tune Recall: 0.7400 (+41.40%)
+  After Hyperparameter Tuning Recall: 0.9733 (+85.99%)
 Best hyperparameter configuration:
-  - Learning Rate: 0.0001
+  - Learning Rate: 0.1
   - Batch Size: 64
-  - Weight Decay: 1e-05
-  - Momentum: 0.9
-  - Optimizer: Adam
+  - Weight Decay: 0.001
+  - Momentum: 0.95
+  - Optimizer: RMSprop
 Final Metrics:
-  - Accuracy: 0.9200
-  - Precision: 0.6805
-  - Recall: 0.6033
-  - F1-Score: 0.6396
-  - ROC-AUC: 0.9243
-  - Validation Loss: 0.2371
+  - Accuracy: 0.2388
+  - Precision: 0.1312
+  - Recall: 0.9733
+  - F1-Score: 0.2313
+  - ROC-AUC: 0.5566
+  - Validation Loss: 598.9334
 

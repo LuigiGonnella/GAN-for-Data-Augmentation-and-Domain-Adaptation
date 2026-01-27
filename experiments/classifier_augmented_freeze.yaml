@@ -3,7 +3,7 @@ experiment_name: augmented_freeze
 data_path: "data/processed/augmented"
 
 model:
-  name: resnet50
+  name: resnet18
   pretrained: true
 
 training:
