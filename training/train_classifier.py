@@ -207,7 +207,7 @@ def main(config=None):
     best_f1 = 0.0  
 
     # Adaptive patience based on model architecture
-    patience = 15 if config['model']['name'] == 'alexnet' else 3
+    patience = 15 if config['model']['training']['scratch'] else 3
     early_stopping_count = 0
 
     validation_losses_epochs = [] #contains losses after each batch
@@ -215,6 +215,8 @@ def main(config=None):
 
     train_accuracy_epochs = []
     validation_accuracy_epochs = []
+
+    init_epochs = 5 if config['model']['training']['scratch'] else 1
     
     for epoch in range(config['training']['params']['epochs']):
         print(f"\nStarting epoch {epoch+1}/{config['training']['params']['epochs']}...")
@@ -263,7 +265,7 @@ def main(config=None):
         train_roc_auc = roc_auc_score(all_labels, all_probs)
 
         
-        #---------- VALIDATION ----------
+        #---------- VALIDATION ----------#
         #we use DEFAULT THRESHOLD 0.5 to classify images
 
         model.eval()
@@ -279,7 +281,9 @@ def main(config=None):
         if scheduler is not None:
             scheduler.step(val_loss)
         
-        if recall > best_recall:
+        
+        
+        if recall > best_recall and epoch > init_epochs: #early in training recall may fluctuate strongly
             early_stopping_count = 0
             best_recall = recall
             best_f1 = f1
