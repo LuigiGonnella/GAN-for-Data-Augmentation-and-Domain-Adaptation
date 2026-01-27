@@ -321,11 +321,22 @@ class DANNTrainer:
         all_targets = np.array(all_targets)
         avg_loss = total_loss / num_samples
         
-        # Find optimal threshold that maximizes F1
+        # Find optimal threshold that maximizes F1 
         precision_vals, recall_vals, thresholds_pr = precision_recall_curve(all_targets, all_probs)
-        f1_scores = 2 * (precision_vals * recall_vals) / (precision_vals + recall_vals + 1e-8)
+        
+        # Avoid division by zero with corrected logic
+        f1_scores = np.zeros(len(precision_vals))
+        valid_idx = (precision_vals + recall_vals) > 0
+        f1_scores[valid_idx] = 2 * (precision_vals[valid_idx] * recall_vals[valid_idx]) / (precision_vals[valid_idx] + recall_vals[valid_idx])
+        
         optimal_idx = np.argmax(f1_scores)
-        optimal_threshold = thresholds_pr[optimal_idx] if optimal_idx < len(thresholds_pr) else 0.5
+        if optimal_idx < len(thresholds_pr):
+            optimal_threshold = thresholds_pr[optimal_idx]
+        else:
+            optimal_threshold = 0.5
+        
+        # Ensure threshold is in valid range [0, 1]
+        optimal_threshold = np.clip(optimal_threshold, 0.0, 1.0)
         
         # Generate predictions with optimal threshold
         optimal_preds = (all_probs >= optimal_threshold).astype(int)

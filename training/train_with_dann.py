@@ -207,8 +207,8 @@ def train_dann(
     logger.info(f"Model selection: Best model based on TARGET RECALL (sensitivity)")
     logger.info(f"Early stopping: Patience of 8 epochs")
     
-    best_target_recall = 0.0
-    patience = 8
+    best_target_recall = -1.0
+    patience = 15
     early_stopping_count = 0
     training_history = {
         'class_loss': [],
@@ -221,6 +221,8 @@ def train_dann(
         'source_recall': [],
         'target_recall': []
     }
+
+    init_epochs = 5
     
     for epoch in range(num_epochs):
         # Compute adaptive lambda using DANNTrainer's method
@@ -263,7 +265,7 @@ def train_dann(
         logger.info(f"  Target - Accuracy: {target_acc:.4f}, Recall: {target_recall:.4f}")
         
         # Save best model based on target RECALL (most important for cancer detection)
-        if target_recall > best_target_recall:
+        if target_recall > best_target_recall and epoch > init_epochs:
             best_target_recall = target_recall
             early_stopping_count = 0
             torch.save(model.state_dict(), output_dir / 'best_dann_model.pth')
