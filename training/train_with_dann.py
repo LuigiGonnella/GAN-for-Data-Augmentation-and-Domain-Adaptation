@@ -19,7 +19,6 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
-from torch.autograd import Function
 from torchvision import transforms, datasets
 import yaml
 import argparse
@@ -27,8 +26,7 @@ from pathlib import Path
 import sys
 import logging
 import json
-import numpy as np
-from tqdm import tqdm
+
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -45,18 +43,14 @@ logger = logging.getLogger(__name__)
 def train_dann(
     config_path,
     source_train_dir='data/processed/domain_adaptation/source_synthetic/train',
-    source_val_dir='data/processed/domain_adaptation/source_synthetic/val',
     target_dir='data/processed/domain_adaptation/target_real/test',
-    output_dir='results/domain_shift/dann'
 ):
     """Train DANN model with domain adversarial adaptation.
     
     Args:
         config_path: Path to training configuration YAML
         source_train_dir: Source training data (real benign + synthetic malignant)
-        source_val_dir: Source validation data (real benign + synthetic malignant)
         target_dir: Target domain (real benign + real malignant)
-        output_dir: Directory for results and metrics
     
     Returns:
         model: Trained DANN model
@@ -75,7 +69,7 @@ def train_dann(
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     logger.info(f"Using device: {device}")
     
-    output_dir = Path(output_dir)
+    output_dir = Path(config['evaluation']['output_dir'])
     output_dir.mkdir(parents=True, exist_ok=True)
     
     # Transforms
@@ -112,18 +106,6 @@ def train_dann(
     )
     logger.info(f"  - Total: {len(source_train_dataset)} samples")
     logger.info(f"  - Classes: {source_train_dataset.classes}")
-    
-    logger.info(f"\nSource VAL: {source_val_dir}")
-    logger.info("  - Real benign + Synthetic malignant (for monitoring)")
-    source_val_dataset = datasets.ImageFolder(source_val_dir, transform=test_transform)
-    source_val_loader = DataLoader(
-        source_val_dataset,
-        batch_size=config['training']['batch_size'],
-        shuffle=False,
-        num_workers=4
-    )
-    logger.info(f"  - Total: {len(source_val_dataset)} samples")
-    logger.info(f"  - Classes: {source_val_dataset.classes}")
     
     logger.info(f"\nTarget (ADAPTATION): {target_dir}")
     logger.info("  - Real benign + Real malignant (unlabeled for adaptation)")
@@ -205,7 +187,7 @@ def train_dann(
     logger.info(f"Training for {num_epochs} epochs with domain adversarial loss...")
     logger.info(f"Lambda schedule: Gradually increases from 0 to 1")
     logger.info(f"Model selection: Best model based on TARGET RECALL (sensitivity)")
-    logger.info(f"Early stopping: Patience of 8 epochs")
+    logger.info(f"Early stopping: Patience of 15 epochs")
     
     best_target_recall = -1.0
     patience = 15
@@ -397,32 +379,19 @@ DANN learns domain-invariant features through adversarial training:
         help='Source training: real benign + synthetic malignant (labeled)'
     )
     parser.add_argument(
-        '--source-val-dir',
-        type=str,
-        default='data/processed/domain_adaptation/source_synthetic/val',
-        help='Source validation: real benign + synthetic malignant (for monitoring)'
-    )
-    parser.add_argument(
         '--target-dir',
         type=str,
         default='data/processed/domain_adaptation/target_real/test',
         help='Target domain: real benign + real malignant (unlabeled for adaptation)'
     )
-    parser.add_argument(
-        '--output-dir',
-        type=str,
-        default='results/domain_shift/dann',
-        help='Output directory for model, metrics, and visualizations'
-    )
+   
     
     args = parser.parse_args()
     
     train_dann(
         args.config,
         args.source_train_dir,
-        args.source_val_dir,
         args.target_dir,
-        args.output_dir
     )
 
 
