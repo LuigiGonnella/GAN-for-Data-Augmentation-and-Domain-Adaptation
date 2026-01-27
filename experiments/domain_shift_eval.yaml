@@ -2,9 +2,9 @@
 
 # Model Configuration
 model:
-  architecture: 'resnet50'
+  architecture: 'alexnet'
   num_classes: 2
-  pretrained: true
+  pretrained: false
 
 # Training Configuration
 training:
@@ -15,7 +15,7 @@ training:
   weight_decay: 0.0001
   scheduler_step: 10
   scheduler_gamma: 0.1
-  early_stopping_patience: 3
+  early_stopping_patience: 5
 
 # Evaluation Configuration
 evaluation:
