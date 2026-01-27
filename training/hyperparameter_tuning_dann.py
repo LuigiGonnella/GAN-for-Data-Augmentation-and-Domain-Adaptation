@@ -23,12 +23,9 @@ import pandas as pd
 import random
 import os
 import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import DataLoader
-from torchvision import transforms, datasets
 
-from models.domain_adaptation.dann import DomainAdversarialNN, DANNTrainer
+# Import the main training function to reuse code
+from train_with_dann import train_dann
 
 # Hyperparameter search space for DANN
 PARAM_DISTRIBUTION = {
@@ -36,7 +33,7 @@ PARAM_DISTRIBUTION = {
     'weight_decay': [0, 1e-4, 1e-5, 1e-6],
     'batch_size': [32, 64],
     'lr': [1e-3, 1e-4, 5e-4],
-    'optimizer': ['Adam', 'AdamW'],
+    'optimizer': ['Adam', 'AdamW', 'RMSProp'],
 }
 
 N_ITERATIONS = 10  # Number of random search iterations
@@ -48,6 +45,9 @@ def train_dann_with_hyperparams(hyperparams, config_path,
                                   source_train_dir, source_val_dir, 
                                   target_dir, output_dir):
     """Train DANN with specific hyperparameters for tuning.
+    
+    This function modifies the config file with tuning hyperparameters
+    and calls the main train_dann function to reuse existing code.
     
     Args:
         hyperparams: Dictionary of hyperparameters to test
@@ -63,170 +63,50 @@ def train_dann_with_hyperparams(hyperparams, config_path,
     print(f"\nTesting hyperparameters: {hyperparams}")
     
     try:
+        # Load and modify config with tuning hyperparameters
         with open(config_path, 'r') as f:
             config = yaml.safe_load(f)
         
-        # Override config with tuning hyperparameters
         config['training']['learning_rate'] = hyperparams['lr']
         config['training']['batch_size'] = hyperparams['batch_size']
         config['training']['weight_decay'] = hyperparams['weight_decay']
         config['training']['num_epochs'] = TUNING_EPOCHS
         config['feature_dim'] = hyperparams['feature_dim']
         
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        # Save temporary config for this run
         output_path = Path(output_dir)
         output_path.mkdir(parents=True, exist_ok=True)
+        temp_config_path = output_path / 'temp_config.yaml'
         
-        # Transforms
-        train_transform = transforms.Compose([
-            transforms.Resize((224, 224)),
-            transforms.RandomHorizontalFlip(p=0.5),
-            transforms.RandomVerticalFlip(p=0.5),
-            transforms.RandomRotation(degrees=15),
-            transforms.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0.05),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        ])
+        with open(temp_config_path, 'w') as f:
+            yaml.dump(config, f)
         
-        test_transform = transforms.Compose([
-            transforms.Resize((224, 224)),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        ])
-        
-        # Data loading
-        source_train_dataset = datasets.ImageFolder(source_train_dir, transform=train_transform)
-        source_train_loader = DataLoader(
-            source_train_dataset,
-            batch_size=config['training']['batch_size'],
-            shuffle=True,
-            num_workers=2,
-            drop_last=True
+        # Train using the main train_dann function to reuse all logic
+        _, source_metrics, target_metrics, domain_gap = train_dann(
+            str(temp_config_path),
+            source_train_dir,
+            source_val_dir,
+            target_dir,
+            str(output_path)
         )
-        
-        target_dataset = datasets.ImageFolder(target_dir, transform=train_transform)
-        target_loader = DataLoader(
-            target_dataset,
-            batch_size=config['training']['batch_size'],
-            shuffle=True,
-            num_workers=2,
-            drop_last=True
-        )
-        
-        # Evaluation loaders
-        source_eval_dataset = datasets.ImageFolder(source_train_dir, transform=test_transform)
-        source_eval_loader = DataLoader(
-            source_eval_dataset,
-            batch_size=config['training']['batch_size'],
-            shuffle=False,
-            num_workers=2
-        )
-        
-        target_eval_dataset = datasets.ImageFolder(target_dir, transform=test_transform)
-        target_eval_loader = DataLoader(
-            target_eval_dataset,
-            batch_size=config['training']['batch_size'],
-            shuffle=False,
-            num_workers=2
-        )
-        
-        # Model
-        model = DomainAdversarialNN(
-            feature_dim=config['feature_dim'],
-            num_classes=config['model']['num_classes']
-        ).to(device)
-        
-        # Optimizer
-        if hyperparams['optimizer'] == 'Adam':
-            optimizer = optim.Adam(
-                model.parameters(),
-                lr=config['training']['learning_rate'],
-                weight_decay=config['training']['weight_decay']
-            )
-        elif hyperparams['optimizer'] == 'AdamW':
-            optimizer = optim.AdamW(
-                model.parameters(),
-                lr=config['training']['learning_rate'],
-                weight_decay=config['training']['weight_decay']
-            )
-        else:
-            optimizer = optim.SGD(
-                model.parameters(),
-                lr=config['training']['learning_rate'],
-                weight_decay=config['training']['weight_decay'],
-                momentum=0.9
-            )
-        
-        scheduler = optim.lr_scheduler.StepLR(
-            optimizer,
-            step_size=config['training'].get('scheduler_step', 10),
-            gamma=config['training'].get('scheduler_gamma', 0.1)
-        )
-        
-        criterion_class = nn.CrossEntropyLoss()
-        criterion_domain = nn.BCEWithLogitsLoss()
-        
-        # Initialize trainer
-        trainer = DANNTrainer(model, device, output_dir=str(output_path))
-        
-        # Training loop
-        best_target_recall = 0.0
-        best_target_f1 = 0.0
-        
-        for epoch in range(TUNING_EPOCHS):
-            lambda_adapt = trainer.compute_lambda_adaptation(epoch, TUNING_EPOCHS)
-            
-            avg_total_loss, avg_class_loss, avg_domain_loss, avg_domain_acc = trainer.train_epoch(
-                source_train_loader,
-                target_loader,
-                optimizer,
-                criterion_class,
-                criterion_domain,
-                lambda_adapt
-            )
-            
-            scheduler.step()
-            
-            # Evaluate
-            _, source_acc, source_recall = trainer.evaluate(source_eval_loader, criterion_class)
-            _, target_acc, target_recall = trainer.evaluate(target_eval_loader, criterion_class)
-            
-            # Calculate F1 scores
-            from sklearn.metrics import classification_report
-            model.eval()
-            target_preds, target_labels = [], []
-            with torch.no_grad():
-                for images, labels in target_eval_loader:
-                    images = images.to(device)
-                    outputs = model(images)
-                    _, predicted = torch.max(outputs, 1)
-                    target_preds.extend(predicted.cpu().numpy())
-                    target_labels.extend(labels.numpy())
-            
-            target_report = classification_report(target_labels, target_preds, output_dict=True, zero_division=0)
-            target_f1 = target_report.get('1', {}).get('f1-score', 0.0)
-            
-            if target_recall > best_target_recall:
-                best_target_recall = target_recall
-            if target_f1 > best_target_f1:
-                best_target_f1 = target_f1
         
         # Prepare results
         result = hyperparams.copy()
-        result['target_accuracy'] = target_acc
-        result['target_recall'] = best_target_recall
-        result['target_f1'] = best_target_f1
-        result['source_accuracy'] = source_acc
-        result['source_recall'] = source_recall
-        result['final_domain_acc'] = avg_domain_acc
-        result['final_class_loss'] = avg_class_loss
-        result['final_domain_loss'] = avg_domain_loss
+        result['target_accuracy'] = target_metrics.get('accuracy', 0)
+        result['target_recall'] = target_metrics.get('recall', 0)
+        result['target_f1'] = target_metrics.get('f1', 0)
+        result['source_accuracy'] = source_metrics.get('accuracy', 0)
+        result['source_recall'] = source_metrics.get('recall', 0)
+        result['source_f1'] = source_metrics.get('f1', 0)
+        result['accuracy_gap'] = domain_gap.get('accuracy_drop', 0)
+        result['f1_gap'] = domain_gap.get('f1_drop', 0)
+        result['recall_gap'] = domain_gap.get('recall_drop', 0)
         
         # Clean up
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
         
-        print(f"Results - Target Recall: {best_target_recall:.4f}, Target F1: {best_target_f1:.4f}, Domain Acc: {avg_domain_acc:.4f}")
+        print(f"Results - Target Recall: {result['target_recall']:.4f}, Target F1: {result['target_f1']:.4f}")
         
         return result
         
@@ -320,6 +200,9 @@ def train_best_config(config_path, best_config, source_train_dir, source_val_dir
                        target_dir, output_dir):
     """Train DANN with best configuration for full epochs.
     
+    This function reuses the main train_dann function with the best
+    hyperparameters identified during tuning.
+    
     Args:
         config_path: Base configuration file
         best_config: Best hyperparameter configuration from tuning
@@ -336,26 +219,17 @@ def train_best_config(config_path, best_config, source_train_dir, source_val_dir
     print("="*70)
     print(f"Training for {BEST_CONFIG_EPOCHS} epochs with best hyperparameters\n")
     
-    # Prepare hyperparameters
-    params = {
-        'lr': float(best_config['lr']),
-        'batch_size': int(best_config['batch_size']),
-        'weight_decay': float(best_config['weight_decay']),
-        'optimizer': best_config['optimizer'],
-        'feature_dim': int(best_config['feature_dim']),
-    }
-    
-    # Load and modify config
+    # Load and modify config with best hyperparameters
     with open(config_path, 'r') as f:
         config = yaml.safe_load(f)
     
-    config['training']['learning_rate'] = params['lr']
-    config['training']['batch_size'] = params['batch_size']
-    config['training']['weight_decay'] = params['weight_decay']
+    config['training']['learning_rate'] = float(best_config['lr'])
+    config['training']['batch_size'] = int(best_config['batch_size'])
+    config['training']['weight_decay'] = float(best_config['weight_decay'])
     config['training']['num_epochs'] = BEST_CONFIG_EPOCHS
-    config['feature_dim'] = params['feature_dim']
+    config['feature_dim'] = int(best_config['feature_dim'])
     
-    # Save modified config
+    # Save best config
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
     config_save_path = output_path / 'best_config.yaml'
@@ -363,10 +237,8 @@ def train_best_config(config_path, best_config, source_train_dir, source_val_dir
         yaml.dump(config, f)
     print(f"Best configuration saved to: {config_save_path}")
     
-    # Train with best config using the full train_dann function
-    from train_with_dann import train_dann
-    
-    model, source_metrics, target_metrics, domain_gap = train_dann(
+    # Train with best config using the main train_dann function (reuses all code)
+    _, source_metrics, target_metrics, domain_gap = train_dann(
         str(config_save_path),
         source_train_dir,
         source_val_dir,
