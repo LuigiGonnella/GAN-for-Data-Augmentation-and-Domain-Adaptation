@@ -1,0 +1,39 @@
+{
+    "source_domain": {
+        "loss": 0.004905698171853372,
+        "accuracy": 1.0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "specificity": 1.0,
+        "sensitivity": 1.0,
+        "roc_auc": 1.0,
+        "pr_auc": 1.0,
+        "optimal_threshold": 0.9956679344177246,
+        "default_threshold_accuracy": 0.9985271317829457,
+        "default_threshold_f1": 0.9960572732932144
+    },
+    "target_domain": {
+        "loss": 0.8241467448692842,
+        "accuracy": 0.39294117647058824,
+        "precision": 0.15562913907284767,
+        "recall": 0.94,
+        "f1": 0.26704545454545453,
+        "specificity": 0.32,
+        "sensitivity": 0.94,
+        "roc_auc": 0.6221762962962962,
+        "pr_auc": 0.15563126367463437,
+        "optimal_threshold": 0.00024447651230730116,
+        "default_threshold_accuracy": 0.8803921568627451,
+        "default_threshold_f1": 0.0
+    },
+    "domain_gap": {
+        "accuracy_drop": 0.6070588235294118,
+        "f1_drop": 0.7329545454545454,
+        "recall_drop": 0.06000000000000005,
+        "precision_drop": 0.8443708609271523,
+        "sensitivity_drop": 0.06000000000000005,
+        "specificity_drop": 0.6799999999999999,
+        "roc_auc_drop": 0.3778237037037038
+    }
+}

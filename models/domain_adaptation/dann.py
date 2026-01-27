@@ -3,38 +3,16 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 from torch.autograd import Function
+from torchvision import models
 
 
 class FeatureExtractor(nn.Module):
     
     def __init__(self, feature_dim=512):
         super().__init__()
-        self.feature_dim = feature_dim
-        
-        # Simple feature extraction network
-        self.features = nn.Sequential(
-            nn.Conv2d(3, 64, kernel_size=3, padding=1),
-            nn.BatchNorm2d(64),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(2, 2),
-            
-            nn.Conv2d(64, 128, kernel_size=3, padding=1),
-            nn.BatchNorm2d(128),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(2, 2),
-            
-            nn.Conv2d(128, 256, kernel_size=3, padding=1),
-            nn.BatchNorm2d(256),
-            nn.ReLU(inplace=True),
-            nn.AdaptiveAvgPool2d((1, 1))
-        )
-        
-        self.fc = nn.Sequential(
-            nn.Linear(256, feature_dim),
-            nn.BatchNorm1d(feature_dim),
-            nn.ReLU(inplace=True),
-            nn.Dropout(0.5)
-        )
+        resnet = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
+        self.features = nn.Sequential(*list(resnet.children())[:-1])  # Remove final FC
+        self.fc = nn.Linear(resnet.fc.in_features, feature_dim)
     
     def forward(self, x):
         x = self.features(x)

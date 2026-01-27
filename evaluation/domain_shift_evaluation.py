@@ -84,11 +84,29 @@ class DomainShiftEvaluator:
         all_targets = np.array(all_targets)
         avg_loss = total_loss / num_samples
         
-        # Find optimal threshold that maximizes F1 (consistent with evaluate_with_threshold_tuning)
+        # Find optimal threshold that maximizes F1 (skip threshold=0.0 to avoid pathological all-positive predictions)
         precision_vals, recall_vals, thresholds_pr = precision_recall_curve(all_targets, all_probs)
-        f1_scores = 2 * (precision_vals * recall_vals) / (precision_vals + recall_vals + 1e-8)
-        optimal_idx = np.argmax(f1_scores)
+
+        # Compute F1 scores with proper zero-division handling
+        f1_scores = np.zeros(len(precision_vals))
+        valid_idx = (precision_vals + recall_vals) > 0
+        f1_scores[valid_idx] = 2 * precision_vals[valid_idx] * recall_vals[valid_idx] / (precision_vals[valid_idx] + recall_vals[valid_idx])
+
+        # thresholds_pr is length N-1, precision/recall/f1_scores is length N
+        # The first F1 score corresponds to threshold=0.0 (all positive predictions), which we want to skip
+        if len(thresholds_pr) > 1:
+            # Only consider thresholds > 0.0
+            f1_scores_valid = f1_scores[1:]
+            if len(f1_scores_valid) > 0:
+                optimal_idx = np.argmax(f1_scores_valid) + 1  # offset by 1
+            else:
+                optimal_idx = 1
+        else:
+            optimal_idx = 1  # fallback
+
         optimal_threshold = thresholds_pr[optimal_idx] if optimal_idx < len(thresholds_pr) else 0.5
+        # Clamp threshold to valid range to prevent pathological values
+        optimal_threshold = np.clip(optimal_threshold, 1e-6, 1.0)
         
         logger.info(f"  Optimal threshold (max F1) for {domain_name}: {optimal_threshold:.3f}")
         

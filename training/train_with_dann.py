@@ -157,8 +157,11 @@ def train_dann(
     
     # Optimizers
     optimizer = optim.Adam(
-        model.parameters(),
-        lr=config['training']['learning_rate'],
+        [
+            {'params': model.feature_extractor.parameters(), 'lr': 1e-4},
+            {'params': model.classifier.parameters(), 'lr': 1e-4},
+            {'params': model.domain_discriminator.parameters(), 'lr': 1e-3}
+        ],
         weight_decay=config['training'].get('weight_decay', 1e-5)
     )
     
@@ -269,7 +272,7 @@ def train_dann(
     logger.info(f"Model saved to: {output_dir / 'best_dann_model.pth'}")
     
     # Load best model
-    model.load_state_dict(torch.load(output_dir / 'best_dann_model.pth'))
+    model.load_state_dict(torch.load(output_dir / 'best_dann_model.pth', weights_only=True))
     
     # Final evaluation
     logger.info("\n" + "="*70)

@@ -20,4 +20,4 @@ training:
 # Evaluation Configuration
 evaluation:
   batch_size: 32
-  output_dir: 'results/domain_shift/ALEXNET'
+  output_dir: 'results/domain_shift/ALEXNET/second_run'
