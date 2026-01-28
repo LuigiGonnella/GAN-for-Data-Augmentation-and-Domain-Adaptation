@@ -3,7 +3,7 @@ experiment_name: augmented_scratch
 data_path: "data/processed/augmented"
 
 model:
-  name: alexnet
+  name: resnet18
   pretrained: false
 
 training:
@@ -16,4 +16,4 @@ training:
   
 best_config_run: false #use in hyperparameter tuning
 
-output_dir: results/classifier_on_augmented_ALEXNET/no_ht
+output_dir: results/scratch_classifier_on_augmented_RESNET18/no_ht

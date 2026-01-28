@@ -9,7 +9,7 @@ from train_classifier import main as train_main
 
 def run_baseline(config_path):
 
-    print("BASELINE MODEL (freezing for resnet) TRAINING")
+    print("BASELINE MODEL TRAINING")
     
     try:
         with open(config_path, 'r') as f:

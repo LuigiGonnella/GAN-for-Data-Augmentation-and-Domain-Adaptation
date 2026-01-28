@@ -9,13 +9,12 @@ import yaml
 import json
 from datetime import datetime
 import os
-from config.utils import load_config
 import argparse
 
-def run_full_pipeline(mode, data_type, model='resnet'):
+def run_full_pipeline(mode, data_type, scratch=False):
     
-    if model == 'resnet':
-        # Standard ResNet pipeline: freeze -> finetune -> hyperparameter tuning
+    if not scratch:
+        # Standard pipeline: freeze -> finetune -> hyperparameter tuning
         
         # STEP 0: Freezing
         print("# STEP 0: Baseline Training (freeze)")
@@ -36,15 +35,15 @@ def run_full_pipeline(mode, data_type, model='resnet'):
         else:
             best_config, tuning_results = False, False
     
-    elif model == 'alexnet':
-        # AlexNet pipeline: train from scratch -> hyperparameter tuning (skip freeze and finetune)
+    else:
+        # pipeline: train from scratch -> hyperparameter tuning (skip freeze and finetune)
         
         # STEP 0: Training from Scratch
-        print("# STEP 0: Training AlexNet from Scratch")
+        print("# STEP 0: Training from Scratch")
         baseline_metrics = run_baseline(f"experiments/scratch_classifier_{data_type}.yaml")
         print(f"\n✓ Training from scratch completed.\nResults:{baseline_metrics}")
         
-        # Skip finetuning step for AlexNet
+        # Skip finetuning step 
         finetune_results = None
         
         if mode=='ht':
@@ -55,9 +54,7 @@ def run_full_pipeline(mode, data_type, model='resnet'):
             print(f'BEST CONFIGURATION:\n{best_config}')
         else:
             best_config, tuning_results = False, False
-    
-    else:
-        raise ValueError(f"Invalid model '{model}'. Must be 'resnet' or 'alexnet'.")
+
     
     # FINAL STEP: Final Report
     print("# FINAL STEP: Final Report")
@@ -323,17 +320,15 @@ if __name__ == '__main__':
     )
 
     parser.add_argument(
-        '--model',
-        type=str,
-        default='resnet',
-        choices=['resnet', 'alexnet'],
-        help='Model architecture to use (resnet or alexnet). Default: resnet'
-    )
-
-    parser.add_argument(
         '--no_ht',
         action='store_true',
         help='Skip hyperparameter tuning step'
+    )
+
+    parser.add_argument(
+        '--scratch', 
+        action='store_true',
+        help='Type of training (from scratch or pretrained)'
     )
 
     args = parser.parse_args()
@@ -345,9 +340,10 @@ if __name__ == '__main__':
     #take as argument 'no_ht' or nothing
     mode = 'no_ht' if args.no_ht else 'ht'
 
-    data_type = args.data_type
-    model = args.model
+    scratch = True if args.scratch else False
 
-    print(f'RUNNING PIPELINE WITH MODE: {mode}, DATA TYPE: {data_type}, and MODEL: {model}\n')
+    data_type = args.data_type
+
+    print(f'RUNNING PIPELINE WITH MODE: {mode}, DATA TYPE: {data_type} from SCRATCH\n') if scratch else print(f'RUNNING PIPELINE WITH MODE: {mode}, DATA TYPE: {data_type}, MODEL: {model} PRETRAINED\n')
     
-    run_full_pipeline(mode, data_type, model)
+    run_full_pipeline(mode, data_type, scratch)

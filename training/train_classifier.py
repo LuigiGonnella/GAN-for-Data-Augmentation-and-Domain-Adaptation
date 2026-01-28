@@ -124,9 +124,8 @@ def define_strategy(config, model):
         elif (config['training']['params']['optimizer']=='RMSprop'):
             optimizer = optim.RMSprop(model.parameters(), lr=lr, momentum=config['training']['params']['momentum'], weight_decay=config['training']['params']['weight_decay'])
         
-        # Add scheduler for AlexNet training from scratch
-        if config['model']['name'] == 'alexnet':
-            scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5, min_lr=1e-5, cooldown=1)
+
+        scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5, min_lr=1e-5, cooldown=1)
 
     elif not config['training']['layers']: #total freeze except last fcl
             model.freeze_layers_except_last()
@@ -185,6 +184,8 @@ def define_strategy(config, model):
     return optimizer, scheduler
 
 def main(config=None):
+
+    print(f'\nTRAINING MODEL: {config['model']['name']}\n')
 
     #---------- PREPROCESSING ----------
     
