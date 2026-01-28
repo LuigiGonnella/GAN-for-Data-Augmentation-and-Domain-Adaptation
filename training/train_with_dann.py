@@ -207,7 +207,6 @@ def train_dann(
         'target_recall': []
     }
 
-    init_epochs = 3
     
     for epoch in range(num_epochs):
         # Compute adaptive lambda using DANNTrainer's method
@@ -251,7 +250,7 @@ def train_dann(
         
         # Save best model based on target RECALL with minimum accuracy threshold
         # This prevents pathological models (recall=1.0, accuracy=0.13)
-        if target_recall > best_target_recall and epoch > init_epochs:
+        if target_recall > best_target_recall:
             if target_acc > 0.30:
                 best_target_recall = target_recall
                 early_stopping_count = 0
