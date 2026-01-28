@@ -2,7 +2,7 @@
 
 # Model Configuration
 model:
-  architecture: 'alexnet'
+  architecture: 'resnet18'
   num_classes: 2
   pretrained: false
 
@@ -20,4 +20,4 @@ training:
 # Evaluation Configuration
 evaluation:
   batch_size: 32
-  output_dir: 'results/domain_shift/ALEXNET/second_run'
+  output_dir: 'results/domain_shift/RESNET18'

@@ -18,9 +18,9 @@ PARAM_DISTRIBUTION = {
 
 N_ITERATIONS = 10 #simulate 10 iterations of RandomSearch
 
-BEST_CONFIG_EPOCHS_RESNET = 10
+BEST_CONFIG_EPOCHS_PRETRAINED = 10
 
-BEST_CONFIG_EPOCHS_ALEXNET = 50
+BEST_CONFIG_EPOCHS_SCRATCH = 50
 
 
 def tune_with_hyperparams(hyperparams, config_path):
@@ -135,7 +135,7 @@ def run_best_config(config_path):
         with open(config_path, 'r') as f:
             config = yaml.safe_load(f)
 
-        config['training']['params']['epochs'] = BEST_CONFIG_EPOCHS_RESNET if 'resnet' in config['model']['name'] else BEST_CONFIG_EPOCHS_ALEXNET
+        config['training']['params']['epochs'] = BEST_CONFIG_EPOCHS_PRETRAINED if not config['training']['scratch'] else BEST_CONFIG_EPOCHS_SCRATCH
         config['training']['params'] = {**config['training']['params'], **params}
         config['best_config_run'] = True
 
