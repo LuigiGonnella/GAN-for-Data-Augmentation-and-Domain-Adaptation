@@ -207,7 +207,7 @@ def main(config=None):
     best_f1 = 0.0  
 
     # Adaptive patience based on model architecture
-    patience = 15 if config['model']['training']['scratch'] else 3
+    patience = 15 if config['training']['scratch'] else 3
     early_stopping_count = 0
 
     validation_losses_epochs = [] #contains losses after each batch
@@ -216,7 +216,7 @@ def main(config=None):
     train_accuracy_epochs = []
     validation_accuracy_epochs = []
 
-    init_epochs = 3 if config['model']['training']['scratch'] else 0
+    init_epochs = 3 if config['training']['scratch'] else 0
     
     for epoch in range(config['training']['params']['epochs']):
         print(f"\nStarting epoch {epoch+1}/{config['training']['params']['epochs']}...")

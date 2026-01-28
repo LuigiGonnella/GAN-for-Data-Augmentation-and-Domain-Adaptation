@@ -16,4 +16,4 @@ training:
   
 best_config_run: false #use in hyperparameter tuning
 
-output_dir: results/classifier_on_baseline_ALEXNET/no_ht
+output_dir: results/classifier_on_baseline_ALEXNET/no_ht/second_run

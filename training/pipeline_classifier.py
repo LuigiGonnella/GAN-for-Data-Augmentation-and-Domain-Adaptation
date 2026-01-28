@@ -41,7 +41,7 @@ def run_full_pipeline(mode, data_type, model='resnet'):
         
         # STEP 0: Training from Scratch
         print("# STEP 0: Training AlexNet from Scratch")
-        baseline_metrics = run_baseline(f"experiments/scartch_classifier_{data_type}.yaml")
+        baseline_metrics = run_baseline(f"experiments/scratch_classifier_{data_type}.yaml")
         print(f"\n✓ Training from scratch completed.\nResults:{baseline_metrics}")
         
         # Skip finetuning step for AlexNet
@@ -50,7 +50,7 @@ def run_full_pipeline(mode, data_type, model='resnet'):
         if mode=='ht':
             # STEP 1: Hyperparameter Tuning from Scratch
             print("# STEP 1: Hyperparameter Tuning with Training from Scratch")
-            best_config, tuning_results = run_best_config(f"experiments/scartch_classifier_{data_type}_ht.yaml")
+            best_config, tuning_results = run_best_config(f"experiments/scratch_classifier_{data_type}_ht.yaml")
             print(f"✓ Hyperparameter tuning completed.\nFinal test metrics: {tuning_results}\n")
             print(f'BEST CONFIGURATION:\n{best_config}')
         else:

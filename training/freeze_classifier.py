@@ -15,7 +15,6 @@ def run_baseline(config_path):
         with open(config_path, 'r') as f:
             config = yaml.safe_load(f)
         
-        
         metrics = train_main(config)
         
         print("✓ TRAINING COMPLETED")
