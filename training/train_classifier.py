@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms, datasets
 import yaml
@@ -97,63 +98,91 @@ def preprocess(config):
     train_loader = DataLoader(train_dataset, batch_size=config['training']['params']['batch_size'], shuffle=True, num_workers=0)
     val_loader = DataLoader(val_dataset, batch_size=config['training']['params']['batch_size'], shuffle=False, num_workers=0)
 
-    model = Classifier(num_classes=2, model_name=config['model']['name'], pretrained=True)
+    pretrained = True if config['model']['pretrained'] else False
+    model = Classifier(num_classes=2, model_name=config['model']['name'], pretrained=pretrained)
 
     return train_loader, val_loader, model
 
 def define_strategy(config, model):
-    if not config['training']['layers']: #total freeze except last fcl
-        model.freeze_layers_except_last()
-        optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=config['training']['params']['lr'], weight_decay=config.get('weight_decay', 1e-5))
+    scheduler = None
+    
+    if config['training']['scratch']:
+        lr = config['training']['params']['lr']
+
+        if not config['training']['ht']:
+            optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=config.get('weight_decay', 1e-5))
+
+        elif (config['training']['params']['optimizer']=='SGD'):
+            optimizer = optim.SGD(model.parameters(), lr=lr, momentum=config['training']['params']['momentum'], weight_decay=config['training']['params']['weight_decay'])
+
+        elif (config['training']['params']['optimizer']=='Adam'):
+            optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=config['training']['params']['weight_decay'])
+
+        elif (config['training']['params']['optimizer']=='AdamW'):
+            optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=config['training']['params']['weight_decay'])
+        
+        elif (config['training']['params']['optimizer']=='RMSprop'):
+            optimizer = optim.RMSprop(model.parameters(), lr=lr, momentum=config['training']['params']['momentum'], weight_decay=config['training']['params']['weight_decay'])
+        
+        # Add scheduler for AlexNet training from scratch
+        if config['model']['name'] == 'alexnet':
+            scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5, min_lr=1e-5, cooldown=1)
+
+    elif not config['training']['layers']: #total freeze except last fcl
+            model.freeze_layers_except_last()
+            optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=config['training']['params']['lr'], weight_decay=config.get('weight_decay', 1e-5))
     
     elif not config['training']['ht']: #finetuning without hyperparameter tuning
         lr = config['training']['params']['lr']
         model.freeze_up_to_layer(layer_num=1)
         # Discriminative learning rates: lower for earlier layers, higher for later layers
-        optimizer = optim.Adam([
-            {'params': model.model.layer2.parameters(), 'lr': lr * 0.1},
-            {'params': model.model.layer3.parameters(), 'lr': lr * 0.3}, #progressive finetuning
-            {'params': model.model.layer4.parameters(), 'lr': lr * 0.5},
-            {'params': model.model.fc.parameters(), 'lr': lr}
-        ], lr=lr, weight_decay=config.get('weight_decay', 1e-5)) 
+        if 'resnet' in config['model']['name']:
+            optimizer = optim.Adam([
+                {'params': model.model.layer2.parameters(), 'lr': lr * 0.1},
+                {'params': model.model.layer3.parameters(), 'lr': lr * 0.3},
+                {'params': model.model.layer4.parameters(), 'lr': lr * 0.5},
+                {'params': model.model.fc.parameters(), 'lr': lr}
+            ], lr=lr, weight_decay=config.get('weight_decay', 1e-5))
+        elif config['model']['name'] == 'alexnet':
+            # AlexNet: progressive unfreezing with discriminative LR
+            optimizer = optim.Adam([
+                {'params': model.model.features[3:].parameters(), 'lr': lr * 0.3},
+                {'params': model.model.classifier[:6].parameters(), 'lr': lr * 0.5},
+                {'params': model.model.classifier[6].parameters(), 'lr': lr}
+            ], lr=lr, weight_decay=config.get('weight_decay', 1e-5))
 
     else: #finetuning with hyperparameter tuning
         model.freeze_up_to_layer(layer_num=1)
         lr = config['training']['params']['lr']
+        
+        # Define parameter groups based on architecture
+        if 'resnet' in config['model']['name']:
+            param_groups = [
+                {'params': model.model.layer2.parameters(), 'lr': lr * 0.1},
+                {'params': model.model.layer3.parameters(), 'lr': lr * 0.3},
+                {'params': model.model.layer4.parameters(), 'lr': lr * 0.5},
+                {'params': model.model.fc.parameters(), 'lr': lr}
+            ]
+        elif config['model']['name'] == 'alexnet':
+            param_groups = [
+                {'params': model.model.features[3:].parameters(), 'lr': lr * 0.3},
+                {'params': model.model.classifier[:6].parameters(), 'lr': lr * 0.5},
+                {'params': model.model.classifier[6].parameters(), 'lr': lr}
+            ]
 
         if (config['training']['params']['optimizer']=='SGD'):
-            optimizer = optim.SGD([
-                {'params': model.model.layer2.parameters(), 'lr': lr * 0.1},
-                {'params': model.model.layer3.parameters(), 'lr': lr * 0.3}, #progressive finetuning
-                {'params': model.model.layer4.parameters(), 'lr': lr * 0.5},
-                {'params': model.model.fc.parameters(), 'lr': lr}
-            ], lr=lr, momentum=config['training']['params']['momentum'], weight_decay=config['training']['params']['weight_decay'])
+            optimizer = optim.SGD(param_groups, lr=lr, momentum=config['training']['params']['momentum'], weight_decay=config['training']['params']['weight_decay'])
 
         elif (config['training']['params']['optimizer']=='Adam'):
-            optimizer = optim.Adam([
-                {'params': model.model.layer2.parameters(), 'lr': lr * 0.1},
-                {'params': model.model.layer3.parameters(), 'lr': lr * 0.3}, #progressive finetuning
-                {'params': model.model.layer4.parameters(), 'lr': lr * 0.5},
-                {'params': model.model.fc.parameters(), 'lr': lr}
-            ], lr=lr, weight_decay=config['training']['params']['weight_decay'])
+            optimizer = optim.Adam(param_groups, lr=lr, weight_decay=config['training']['params']['weight_decay'])
 
         elif (config['training']['params']['optimizer']=='AdamW'):
-            optimizer = optim.AdamW([
-                {'params': model.model.layer2.parameters(), 'lr': lr * 0.1},
-                {'params': model.model.layer3.parameters(), 'lr': lr * 0.3}, #progressive finetuning
-                {'params': model.model.layer4.parameters(), 'lr': lr * 0.5},
-                {'params': model.model.fc.parameters(), 'lr': lr}
-            ], lr=lr, weight_decay=config['training']['params']['weight_decay'])
+            optimizer = optim.AdamW(param_groups, lr=lr, weight_decay=config['training']['params']['weight_decay'])
         
         elif (config['training']['params']['optimizer']=='RMSprop'):
-            optimizer = optim.RMSprop([
-                {'params': model.model.layer2.parameters(), 'lr': lr * 0.1},
-                {'params': model.model.layer3.parameters(), 'lr': lr * 0.3}, #progressive finetuning
-                {'params': model.model.layer4.parameters(), 'lr': lr * 0.5},
-                {'params': model.model.fc.parameters(), 'lr': lr}
-            ], lr=lr, momentum=config['training']['params']['momentum'], weight_decay=config['training']['params']['weight_decay'])
+            optimizer = optim.RMSprop(param_groups, lr=lr, momentum=config['training']['params']['momentum'], weight_decay=config['training']['params']['weight_decay'])
     
-    return optimizer
+    return optimizer, scheduler
 
 def main(config=None):
 
@@ -163,7 +192,7 @@ def main(config=None):
     
     #---------- STRATEGY ----------
 
-    optimizer = define_strategy(config, model)
+    optimizer, scheduler = define_strategy(config, model)
 
     #---------- TRAINING ---------- 
     #we use DEFAULT THRESHOLD 0.5 to classify images
@@ -174,10 +203,11 @@ def main(config=None):
     
     criterion = nn.CrossEntropyLoss()
 
-    best_recall = 0.0
+    best_recall = -1.0  # Initialize to -1 to ensure first epoch saves
     best_f1 = 0.0  
 
-    patience = 3
+    # Adaptive patience based on model architecture
+    patience = 15 if config['training']['scratch'] else 3
     early_stopping_count = 0
 
     validation_losses_epochs = [] #contains losses after each batch
@@ -185,6 +215,8 @@ def main(config=None):
 
     train_accuracy_epochs = []
     validation_accuracy_epochs = []
+
+    init_epochs = 3 if config['training']['scratch'] else 0
     
     for epoch in range(config['training']['params']['epochs']):
         print(f"\nStarting epoch {epoch+1}/{config['training']['params']['epochs']}...")
@@ -233,7 +265,7 @@ def main(config=None):
         train_roc_auc = roc_auc_score(all_labels, all_probs)
 
         
-        #---------- VALIDATION ----------
+        #---------- VALIDATION ----------#
         #we use DEFAULT THRESHOLD 0.5 to classify images
 
         model.eval()
@@ -245,13 +277,19 @@ def main(config=None):
         print(f"Epoch {epoch+1}/{config['training']['params']['epochs']}, Train Loss: {train_loss:.4f}, Accuracy: {train_accuracy:.4f}, Recall: {train_recall:.4f}, Precision: {train_precision:.4f}, F1: {train_f1:.4f}, ROC-AUC: {train_roc_auc:.4f}")
         print(f"Epoch {epoch+1}/{config['training']['params']['epochs']}, Val Loss: {val_loss:.4f}, Accuracy: {accuracy:.4f}, Recall: {recall:.4f}, Precision: {precision:.4f}, F1: {f1:.4f}, ROC-AUC: {roc_auc:.4f}")
         
-        if recall > best_recall:
+        # Step scheduler if it exists (AlexNet training from scratch)
+        if scheduler is not None:
+            scheduler.step(val_loss)
+        
+        
+        
+        if recall > best_recall and epoch > init_epochs: #early in training recall may fluctuate strongly
             early_stopping_count = 0
             best_recall = recall
             best_f1 = f1
-            output_dir = config.get('output_dir', 'results/baseline')
-            os.makedirs(output_dir, exist_ok=True)
-            model_save_path = os.path.join(output_dir, 'classifier.pth')
+            output_dir = Path(config.get('output_dir', 'results/baseline'))
+            output_dir.mkdir(parents=True, exist_ok=True)
+            model_save_path = output_dir / 'classifier.pth'
             torch.save(model.state_dict(), model_save_path)
         else:
             early_stopping_count+=1
@@ -263,31 +301,31 @@ def main(config=None):
     
     print(f'Training completed. \nBest recall: {best_recall:.4f}\nBest f1-score: {best_f1:.4f}')
     
-    output_dir = config.get('output_dir', 'results/baseline')
-    model_save_path = os.path.join(output_dir, 'classifier.pth')
+    output_dir = Path(config.get('output_dir', 'results/baseline'))
+    model_save_path = output_dir / 'classifier.pth'
 
     optimal_threshold = False #initialize for non-best_config runs in hyperparameter tuning 
     
     #---------- PLOTS ----------
     if (config['training']['ht'] and config['best_config_run']) or (not config['training']['ht']): #plots only if its not hyperparameter tuning or if it's the final run of best configuration of hyperparameter tuning
-        plot_dir = os.path.join(output_dir, 'plots')
-        os.makedirs(plot_dir, exist_ok=True)
+        plot_dir = output_dir / 'plots'
+        plot_dir.mkdir(parents=True, exist_ok=True)
         
         
-        plot_train_val_stats(plot_dir, train_losses_epochs, validation_losses_epochs, train_accuracy_epochs, validation_accuracy_epochs)
+        plot_train_val_stats(str(plot_dir), train_losses_epochs, validation_losses_epochs, train_accuracy_epochs, validation_accuracy_epochs)
 
         #PLOTTING ROC-CURVE and RECALL-PRECISION on VALIDATION SET to compute OPTIMAL THRESHOLD (max F1)
-        val_loss_final, val_accuracy, val_f1, val_recall, val_precision, val_roc_auc, val_cm, optimal_threshold = evaluate_with_threshold_tuning(model, val_loader, criterion, device, plot_dir)
+        val_loss_final, val_accuracy, val_f1, val_recall, val_precision, val_roc_auc, val_cm, optimal_threshold = evaluate_with_threshold_tuning(model, val_loader, criterion, device, str(plot_dir))
         print(f'\nValidation with Optimal Threshold: Loss: {val_loss_final:.4f}, Accuracy: {val_accuracy:.4f}, Recall: {val_recall:.4f}, Precision: {val_precision:.4f}, F1: {val_f1:.4f}, ROC-AUC: {val_roc_auc:.4f}')
         print(f'Validation Confusion Matrix:\n{val_cm}\n')
 
     #---------- TESTING USING OPTIMAL THRESHOLD ----------
-    model.load_state_dict(torch.load(model_save_path))
+    model.load_state_dict(torch.load(model_save_path, weights_only=True))
     test_loss, test_accuracy, test_f1, test_recall, test_precision, test_roc_auc, test_cm = test_model(model, config, device, optimal_threshold)
 
     #PLOT CONFUSION MATRIX
     if (config['training']['ht'] and config['best_config_run']) or (not config['training']['ht']): #plots only if its not hyperparameter tuning or if it's the final run of best configuration of hyperparameter tuning
-        plot_cm(plot_dir, test_cm)
+        plot_cm(str(plot_dir), test_cm)
         print(f'Final Test Loss: {test_loss:.4f}, Test Accuracy: {test_accuracy:.4f}, Recall: {test_recall:.4f}, Precision: {test_precision:.4f}, F1: {test_f1:.4f}, ROC-AUC: {test_roc_auc:.4f}')
         print(f'Optimal Threshold: {optimal_threshold:.3f}')
         print(f'Confusion Matrix:\n{test_cm}')

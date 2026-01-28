@@ -17,8 +17,8 @@ Goal: Improve performance on target domain by learning features that work
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
-from torch.autograd import Function
 from torchvision import transforms, datasets
 import yaml
 import argparse
@@ -26,8 +26,7 @@ from pathlib import Path
 import sys
 import logging
 import json
-import numpy as np
-from tqdm import tqdm
+
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -44,18 +43,14 @@ logger = logging.getLogger(__name__)
 def train_dann(
     config_path,
     source_train_dir='data/processed/domain_adaptation/source_synthetic/train',
-    source_val_dir='data/processed/domain_adaptation/source_synthetic/val',
     target_dir='data/processed/domain_adaptation/target_real/test',
-    output_dir='results/domain_shift/dann'
 ):
     """Train DANN model with domain adversarial adaptation.
     
     Args:
         config_path: Path to training configuration YAML
         source_train_dir: Source training data (real benign + synthetic malignant)
-        source_val_dir: Source validation data (real benign + synthetic malignant)
         target_dir: Target domain (real benign + real malignant)
-        output_dir: Directory for results and metrics
     
     Returns:
         model: Trained DANN model
@@ -74,7 +69,7 @@ def train_dann(
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     logger.info(f"Using device: {device}")
     
-    output_dir = Path(output_dir)
+    output_dir = Path(config['evaluation']['output_dir'])
     output_dir.mkdir(parents=True, exist_ok=True)
     
     # Transforms
@@ -111,18 +106,6 @@ def train_dann(
     )
     logger.info(f"  - Total: {len(source_train_dataset)} samples")
     logger.info(f"  - Classes: {source_train_dataset.classes}")
-    
-    logger.info(f"\nSource VAL: {source_val_dir}")
-    logger.info("  - Real benign + Synthetic malignant (for monitoring)")
-    source_val_dataset = datasets.ImageFolder(source_val_dir, transform=test_transform)
-    source_val_loader = DataLoader(
-        source_val_dataset,
-        batch_size=config['training']['batch_size'],
-        shuffle=False,
-        num_workers=4
-    )
-    logger.info(f"  - Total: {len(source_val_dataset)} samples")
-    logger.info(f"  - Classes: {source_val_dataset.classes}")
     
     logger.info(f"\nTarget (ADAPTATION): {target_dir}")
     logger.info("  - Real benign + Real malignant (unlabeled for adaptation)")
@@ -174,15 +157,21 @@ def train_dann(
     
     # Optimizers
     optimizer = optim.Adam(
-        model.parameters(),
-        lr=config['training']['learning_rate'],
+        [
+            {'params': model.feature_extractor.parameters(), 'lr': 1e-4},
+            {'params': model.classifier.parameters(), 'lr': 1e-4},
+            {'params': model.domain_discriminator.parameters(), 'lr': 1e-3}
+        ],
         weight_decay=config['training'].get('weight_decay', 1e-5)
     )
     
-    scheduler = optim.lr_scheduler.StepLR(
+    scheduler = ReduceLROnPlateau(
         optimizer,
-        step_size=config['training'].get('scheduler_step', 10),
-        gamma=config['training'].get('scheduler_gamma', 0.1)
+        mode='min',
+        factor=0.5,
+        patience=5,
+        min_lr=1e-6,
+        cooldown=1
     )
     
     criterion_class = nn.CrossEntropyLoss()
@@ -200,9 +189,12 @@ def train_dann(
     num_epochs = config['training']['num_epochs']
     logger.info(f"Training for {num_epochs} epochs with domain adversarial loss...")
     logger.info(f"Lambda schedule: Gradually increases from 0 to 1")
-    logger.info(f"Model selection: Best model based on TARGET RECALL (sensitivity)")
+    logger.info(f"Model selection: Best TARGET RECALL with min accuracy threshold (>30%)")
+    logger.info(f"Early stopping: Patience of 15 epochs")
     
-    best_target_recall = 0.0
+    best_target_recall = -1.0
+    patience = 15
+    early_stopping_count = 0
     training_history = {
         'class_loss': [],
         'domain_loss': [],
@@ -214,6 +206,8 @@ def train_dann(
         'source_recall': [],
         'target_recall': []
     }
+
+    init_epochs = 3
     
     for epoch in range(num_epochs):
         # Compute adaptive lambda using DANNTrainer's method
@@ -235,11 +229,12 @@ def train_dann(
         training_history['total_loss'].append(avg_total_loss)
         training_history['domain_acc'].append(avg_domain_acc)
         
-        scheduler.step()
-        
         # Evaluate using DANNTrainer's evaluate method
         _, source_acc, source_recall = trainer.evaluate(source_eval_loader, criterion_class)
         _, target_acc, target_recall = trainer.evaluate(target_eval_loader, criterion_class)
+        
+        # Step scheduler based on class loss
+        scheduler.step(avg_class_loss)
         
         training_history['source_acc'].append(source_acc)
         training_history['target_acc'].append(target_acc)
@@ -254,17 +249,30 @@ def train_dann(
         logger.info(f"  Source - Accuracy: {source_acc:.4f}, Recall: {source_recall:.4f}")
         logger.info(f"  Target - Accuracy: {target_acc:.4f}, Recall: {target_recall:.4f}")
         
-        # Save best model based on target RECALL (most important for cancer detection)
-        if target_recall > best_target_recall:
-            best_target_recall = target_recall
-            torch.save(model.state_dict(), output_dir / 'best_dann_model.pth')
-            logger.info(f"  ✓ New best target recall: {best_target_recall:.4f}")
+        # Save best model based on target RECALL with minimum accuracy threshold
+        # This prevents pathological models (recall=1.0, accuracy=0.13)
+        if target_recall > best_target_recall and epoch > init_epochs:
+            if target_acc > 0.30:
+                best_target_recall = target_recall
+                early_stopping_count = 0
+                torch.save(model.state_dict(), output_dir / 'best_dann_model.pth')
+                logger.info(f"  ✓ New best target recall: {best_target_recall:.4f} (acc={target_acc:.4f})")
+            else:
+                logger.info(f"  ⚠ Recall improved ({target_recall:.4f}) but accuracy too low ({target_acc:.4f} < 0.30)")
+                early_stopping_count += 1
+        else:
+            early_stopping_count += 1
+            
+        if early_stopping_count >= patience:
+            logger.info(f"\nEarly stopping triggered at epoch {epoch+1}")
+            logger.info(f"No improvement in target recall for {patience} epochs")
+            break
     
     logger.info(f"\nTraining completed. Best target recall: {best_target_recall:.4f}")
     logger.info(f"Model saved to: {output_dir / 'best_dann_model.pth'}")
     
     # Load best model
-    model.load_state_dict(torch.load(output_dir / 'best_dann_model.pth'))
+    model.load_state_dict(torch.load(output_dir / 'best_dann_model.pth', weights_only=True))
     
     # Final evaluation
     logger.info("\n" + "="*70)
@@ -379,32 +387,19 @@ DANN learns domain-invariant features through adversarial training:
         help='Source training: real benign + synthetic malignant (labeled)'
     )
     parser.add_argument(
-        '--source-val-dir',
-        type=str,
-        default='data/processed/domain_adaptation/source_synthetic/val',
-        help='Source validation: real benign + synthetic malignant (for monitoring)'
-    )
-    parser.add_argument(
         '--target-dir',
         type=str,
         default='data/processed/domain_adaptation/target_real/test',
         help='Target domain: real benign + real malignant (unlabeled for adaptation)'
     )
-    parser.add_argument(
-        '--output-dir',
-        type=str,
-        default='results/domain_shift/dann',
-        help='Output directory for model, metrics, and visualizations'
-    )
+   
     
     args = parser.parse_args()
     
     train_dann(
         args.config,
         args.source_train_dir,
-        args.source_val_dir,
         args.target_dir,
-        args.output_dir
     )
 
 

@@ -1,0 +1,1 @@
+baseline intende solo la valutazione con l'evaluator sul training senza dann, mentre dann fa sia training con dann che valutazione

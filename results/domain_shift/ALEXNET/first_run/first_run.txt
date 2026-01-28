@@ -1,0 +1,16 @@
+this was the first run only maximizing recall but then we changed:
+Done! The accuracy threshold is now active:
+
+Changes Made:
+
+Model saves only when: recall improves AND accuracy > 30%
+Warning message when recall improves but accuracy too low
+Updated logging to show both recall and accuracy when saving
+What This Prevents:
+
+Epoch 20: Recall=1.0, Accuracy=0.131 → ⚠️ Won't save (accuracy < 30%)
+Epoch 7: Recall=0.95, Accuracy=0.181 → ⚠️ Won't save (accuracy < 30%)
+What This Allows:
+
+Models with good balance (recall ≥ 0.85, accuracy > 30%)
+The 30% threshold is conservative - it still allows high recall priority while filtering out completely pathological models.

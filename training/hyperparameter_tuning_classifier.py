@@ -9,20 +9,23 @@ from train_classifier import main as train_main
 import random
 import os
 PARAM_DISTRIBUTION = {
-    'weight_decay': [0, 1e-3, 1e-4, 1e-5],
+    'weight_decay': [0, 1e-4, 1e-5],
     'batch_size': [32, 64],
     'lr': [1e-3, 1e-4, 5e-4],
-    'momentum': [0.8, 0.9, 0.95],
-    'optimizer': ['SGD', 'Adam', 'RMSprop', 'AdamW'] ,
+    'momentum': [0.9, 0.95],
+    'optimizer': ['Adam', 'RMSprop', 'AdamW'] ,
 }
 
 N_ITERATIONS = 10 #simulate 10 iterations of RandomSearch
 
-BEST_CONFIG_EPOCHS = 10
+BEST_CONFIG_EPOCHS_RESNET = 10
+
+BEST_CONFIG_EPOCHS_ALEXNET = 50
+
 
 def tune_with_hyperparams(hyperparams, config_path):
     
-    print("BASELINE DATASET TRAINING - HYPERPARAMETER TUNING & FINETUNING'")
+    print("HYPERPARAMETER TUNING")
     print(f"TESTING PARAMS: {hyperparams}")
     
     try:
@@ -105,7 +108,7 @@ def run_hyperparameter_tuning(config_path):
     best_idx = results_df['recall'].idxmax()
     best_config = results_df.loc[best_idx]
     
-    print("HYPERPARAMETER TUNING COMPLETED.\n")
+    print("✓ HYPERPARAMETER TUNING COMPLETED.\n")
         
     
  
@@ -126,19 +129,19 @@ def run_best_config(config_path):
         'optimizer': best_config['optimizer'],
     }
 
-    print("FINETUNING WITH HYPERPARAMETER TUNING TRAINING - BEST CONFIGURATION TRAINING")
+    print("TRAINING WITH BEST CONFIGURATION")
 
     try:
         with open(config_path, 'r') as f:
             config = yaml.safe_load(f)
 
-        config['training']['params']['epochs'] = BEST_CONFIG_EPOCHS
+        config['training']['params']['epochs'] = BEST_CONFIG_EPOCHS_RESNET if 'resnet' in config['model']['name'] else BEST_CONFIG_EPOCHS_ALEXNET
         config['training']['params'] = {**config['training']['params'], **params}
         config['best_config_run'] = True
 
         metrics = train_main(config)
         
-        print("FINETUNING WITH HYPERPARAMETER TUNING TRAINING COMPLETED")
+        print("✓ TRAINING WITH BEST CONFIGURATION COMPLETED")
         return best_config, metrics
     except Exception as e:
         print(f'Error with file name {config_path}: {e}')
@@ -147,7 +150,7 @@ def run_best_config(config_path):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
-        description='BASELINE DATASET TRAINING - HYPERPARAMETER TUNING & FINETUNING'
+        description='HYPERPARAMETER TUNING'
     )
     parser.add_argument(
         '--config', 

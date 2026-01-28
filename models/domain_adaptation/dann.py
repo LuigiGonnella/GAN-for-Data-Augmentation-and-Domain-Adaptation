@@ -3,38 +3,16 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 from torch.autograd import Function
+from torchvision import models
 
 
 class FeatureExtractor(nn.Module):
     
     def __init__(self, feature_dim=512):
         super().__init__()
-        self.feature_dim = feature_dim
-        
-        # Simple feature extraction network
-        self.features = nn.Sequential(
-            nn.Conv2d(3, 64, kernel_size=3, padding=1),
-            nn.BatchNorm2d(64),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(2, 2),
-            
-            nn.Conv2d(64, 128, kernel_size=3, padding=1),
-            nn.BatchNorm2d(128),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(2, 2),
-            
-            nn.Conv2d(128, 256, kernel_size=3, padding=1),
-            nn.BatchNorm2d(256),
-            nn.ReLU(inplace=True),
-            nn.AdaptiveAvgPool2d((1, 1))
-        )
-        
-        self.fc = nn.Sequential(
-            nn.Linear(256, feature_dim),
-            nn.BatchNorm1d(feature_dim),
-            nn.ReLU(inplace=True),
-            nn.Dropout(0.5)
-        )
+        resnet = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
+        self.features = nn.Sequential(*list(resnet.children())[:-1])  # Remove final FC
+        self.fc = nn.Linear(resnet.fc.in_features, feature_dim)
     
     def forward(self, x):
         x = self.features(x)
@@ -321,11 +299,22 @@ class DANNTrainer:
         all_targets = np.array(all_targets)
         avg_loss = total_loss / num_samples
         
-        # Find optimal threshold that maximizes F1
+        # Find optimal threshold that maximizes F1 
         precision_vals, recall_vals, thresholds_pr = precision_recall_curve(all_targets, all_probs)
-        f1_scores = 2 * (precision_vals * recall_vals) / (precision_vals + recall_vals + 1e-8)
+        
+        # Avoid division by zero with corrected logic
+        f1_scores = np.zeros(len(precision_vals))
+        valid_idx = (precision_vals + recall_vals) > 0
+        f1_scores[valid_idx] = 2 * (precision_vals[valid_idx] * recall_vals[valid_idx]) / (precision_vals[valid_idx] + recall_vals[valid_idx])
+        
         optimal_idx = np.argmax(f1_scores)
-        optimal_threshold = thresholds_pr[optimal_idx] if optimal_idx < len(thresholds_pr) else 0.5
+        if optimal_idx < len(thresholds_pr):
+            optimal_threshold = thresholds_pr[optimal_idx]
+        else:
+            optimal_threshold = 0.5
+        
+        # Ensure threshold is in valid range [0, 1]
+        optimal_threshold = np.clip(optimal_threshold, 0.0, 1.0)
         
         # Generate predictions with optimal threshold
         optimal_preds = (all_probs >= optimal_threshold).astype(int)

@@ -1,0 +1,19 @@
+experiment_name: baseline_scratch
+
+data_path: "data/processed/baseline"
+
+model:
+  name: alexnet
+  pretrained: false
+
+training:
+  scratch: true
+  ht: false
+  params:
+    epochs: 50
+    batch_size: 64
+    lr: 0.001
+  
+best_config_run: false #use in hyperparameter tuning
+
+output_dir: results/classifier_on_baseline_ALEXNET/no_ht/second_run

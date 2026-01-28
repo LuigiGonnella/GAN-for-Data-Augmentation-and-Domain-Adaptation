@@ -87,10 +87,21 @@ def evaluate_with_threshold_tuning(model, dataloader, criterion, device, plot_di
     
     # Find optimal threshold that maximizes F1 for medical imaging
     precision, recall, thresholds_pr = precision_recall_curve(all_labels, all_probs)
-    f1 = precision * recall / (precision + recall)
-    # For medical imaging, prioritize F1 to balance RECALL and PRECISION (choosing optimal th basing only on recall wold fic threshold=0.0 and the model would classify each sample as positive)
-    optimal_idx = np.argmax(f1)  
-    optimal_threshold = thresholds_pr[optimal_idx] if optimal_idx < len(thresholds_pr) else 0.5
+    f1_scores = np.zeros(len(precision))
+    # Avoid division by zero
+    valid_idx = (precision + recall) > 0
+    f1_scores[valid_idx] = 2 * precision[valid_idx] * recall[valid_idx] / (precision[valid_idx] + recall[valid_idx])
+    
+    # Find optimal threshold that maximizes F1 for medical imaging
+    optimal_idx = np.argmax(f1_scores)  
+    # Clamp threshold to valid range [0, 1] and ensure it's not at boundary
+    if optimal_idx < len(thresholds_pr):
+        optimal_threshold = thresholds_pr[optimal_idx]
+    else:
+        optimal_threshold = 0.5
+    
+    # Ensure threshold is in valid range for probabilities
+    optimal_threshold = np.clip(optimal_threshold, 0.0, 1.0)
     
     print(f"\n  Optimal threshold (max F1): {optimal_threshold:.3f}")
     

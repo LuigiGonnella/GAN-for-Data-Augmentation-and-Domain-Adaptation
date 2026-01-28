@@ -1,0 +1,1 @@
+resnet18 pretrained as feature extractor and gradual lr in Adam

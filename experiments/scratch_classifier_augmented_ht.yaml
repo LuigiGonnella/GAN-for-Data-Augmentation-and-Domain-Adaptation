@@ -1,0 +1,18 @@
+experiment_name: augmented_scratch_ht
+
+data_path: "data/processed/augmented"
+
+
+model:
+  name: alexnet
+  pretrained: false
+
+training: #hyperparameter-tuning with random search
+  scratch: true
+  ht: true
+  params:
+    epochs: 5 #epochs for hyperparameter tuning, not for final training
+
+best_config_run: false
+
+output_dir: results/classifier_on_augmented_ALEXNET/ht
