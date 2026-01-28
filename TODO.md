@@ -1,3 +1,4 @@
 # RENAMING
-rinominare cartelle dei BEST MODELS
-rinominare cartelle classifier_on_augmented distinguendo DCGAN vs cDCGAN
+provare con NON pretrained ALEXNET e DANN
+provare con NON pretrained ALEXNET senza DANN per vedere miglioramenti tra baseline e augmented
+merge resnet18 in different-losses branch e poi anche alexnet branch in different-losses, infine different-losses in main

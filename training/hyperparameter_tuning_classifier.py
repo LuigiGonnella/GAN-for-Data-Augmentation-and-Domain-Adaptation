@@ -11,7 +11,7 @@ import os
 PARAM_DISTRIBUTION = {
     'weight_decay': [0, 1e-3, 1e-4, 1e-5],
     'batch_size': [32, 64],
-    'lr': [1e-1, 1e-2, 1e-3, 1e-4],
+    'lr': [1e-3, 1e-4, 5e-4],
     'momentum': [0.8, 0.9, 0.95],
     'optimizer': ['SGD', 'Adam', 'RMSprop', 'AdamW'] ,
 }

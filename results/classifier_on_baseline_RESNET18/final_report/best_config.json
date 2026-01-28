@@ -1,0 +1,17 @@
+{
+  "best_hyperparameters": {
+    "learning_rate": 0.1,
+    "batch_size": 64,
+    "weight_decay": 0.001,
+    "momentum": 0.95,
+    "optimizer": "RMSprop"
+  },
+  "final_metrics": {
+    "accuracy": 0.24901960784313726,
+    "precision": 0.13245334547109694,
+    "recall": 0.97,
+    "f1_score": 0.23307969563476172,
+    "roc_auc": 0.564637037037037,
+    "val_loss": 586.6561284562653
+  }
+}

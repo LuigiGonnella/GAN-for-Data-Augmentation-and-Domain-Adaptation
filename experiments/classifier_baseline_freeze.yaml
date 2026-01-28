@@ -3,7 +3,7 @@ experiment_name: baseline_freeze
 data_path: "data/processed/baseline"
 
 model:
-  name: resnet50
+  name: resnet18
   pretrained: true
 
 training:
