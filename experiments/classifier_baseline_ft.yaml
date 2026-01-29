@@ -4,10 +4,11 @@ data_path: "data/processed/baseline"
 
 
 model:
-  name: resnet18
+  name: resnet50
   pretrained: true
 
 training: #no hyperparameter-tuning
+  scratch: false
   ht: false
   layers: 2
   params:
@@ -17,4 +18,4 @@ training: #no hyperparameter-tuning
   
 best_config_run: false #use in hyperparameter tuning
 
-output_dir: results/classifier_on_baseline/ft
+output_dir: results/NEW_classifier_on_baseline_RESNET50/ft

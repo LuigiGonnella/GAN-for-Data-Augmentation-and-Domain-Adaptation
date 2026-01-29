@@ -59,7 +59,7 @@ def run_full_pipeline(mode, data_type, scratch=False):
     # FINAL STEP: Final Report
     print("# FINAL STEP: Final Report")
     
-    generate_final_report(baseline_metrics, finetune_results, tuning_results, best_config, data_type, model)
+    generate_final_report(baseline_metrics, finetune_results, tuning_results, best_config, data_type, scratch)
     
     print("PIPELINE COMPLETED SUCCESSFULLY!")
     print(f"End time: {datetime.now()}")
@@ -67,7 +67,7 @@ def run_full_pipeline(mode, data_type, scratch=False):
 
 
 FINAL_METRICS = "Final Metrics:\n"
-def generate_final_report(baseline_metrics, finetune_results, tuning_results, best_config, data_type, model='resnet'):
+def generate_final_report(baseline_metrics, finetune_results, tuning_results, best_config, data_type, scratch):
     # --- Generate improved image report with graphs and schemas ---
     report_dir = f"results/classifier_on_{data_type}/final_report"
     os.makedirs(report_dir, exist_ok=True)
@@ -76,7 +76,7 @@ def generate_final_report(baseline_metrics, finetune_results, tuning_results, be
         import seaborn as sns
         import pandas as pd
         # Prepare metrics for each step
-        if model == 'alexnet':
+        if scratch:
             steps = ['Scratch', 'Hyperparam Tuned']
             values = [
                 [baseline_metrics['accuracy'], baseline_metrics['precision'], baseline_metrics['recall'], baseline_metrics['f1'], baseline_metrics['roc_auc'], baseline_metrics['val_loss']],
@@ -135,8 +135,8 @@ def generate_final_report(baseline_metrics, finetune_results, tuning_results, be
         ax3 = fig.add_subplot(gs[1:, 1])
         ax3.axis('off')
         
-        if model == 'alexnet':
-            # For AlexNet: compare scratch vs hyperparameter tuned
+        if scratch:
+            #compare scratch vs hyperparameter tuned
             improvement_final_f1 = (tuning_results['f1'] - baseline_metrics['f1']) / baseline_metrics['f1'] * 100 if tuning_results else None
             improvement_final_recall = (tuning_results['recall'] - baseline_metrics['recall']) / baseline_metrics['recall'] * 100 if tuning_results else None
             
@@ -207,9 +207,8 @@ def generate_final_report(baseline_metrics, finetune_results, tuning_results, be
     # Write text report
     with open(report_path, 'w') as f:
         f.write("FINAL OPTIMIZATION REPORT\n")
-        f.write(f"Model: {model.upper()}\n\n")
         
-        if model == 'alexnet':
+        if scratch:
             f.write("STEP 0: TRAINING FROM SCRATCH\n")
         else:
             f.write("STEP 0: BASELINE TRAINING (freeze)\n")
@@ -231,7 +230,7 @@ def generate_final_report(baseline_metrics, finetune_results, tuning_results, be
             f.write(f"  - Val Loss: {finetune_results['val_loss']:.4f}\n\n")
 
         if best_config is not False:
-            step_num = "STEP 1" if model == 'alexnet' else "STEP 2"
+            step_num = "STEP 1" if scratch else "STEP 2"
             f.write(f"{step_num}: HYPERPARAMETER TUNING\n")
             f.write(f"Best hyperparameter configuration:\n{best_config}\n")
             f.write(FINAL_METRICS)
@@ -242,7 +241,7 @@ def generate_final_report(baseline_metrics, finetune_results, tuning_results, be
             f.write(f"  - ROC-AUC: {float(tuning_results['roc_auc']):.4f}\n")
             f.write(f"  - Validation Loss: {float(tuning_results['val_loss']):.4f}\n\n")
             
-            if model == 'alexnet':
+            if scratch:
                 f.write("COMPARISON: Scratch vs Hyperparameter Tuned\n")
             else:
                 f.write("COMPARISON: Baseline vs Fine-tuned vs Fine Tuned and Hyperparameter Tuned\n")
@@ -253,7 +252,7 @@ def generate_final_report(baseline_metrics, finetune_results, tuning_results, be
             improvement_finetune_f1 = (finetune_results['f1'] - baseline_metrics['f1']) / baseline_metrics['f1'] * 100
             improvement_finetune_recall = (finetune_results['recall'] - baseline_metrics['recall']) / baseline_metrics['recall'] * 100
         
-        initial_label = "Scratch" if model == 'alexnet' else "Baseline"
+        initial_label = "Scratch" if scratch else "Baseline"
         f.write(f"{initial_label} F1: {baseline_metrics['f1']:.4f}\n")
         if finetune_results:
             f.write(f"Fine Tune F1: {finetune_results['f1']:.4f} ({improvement_finetune_f1:+.2f}%)\n")
@@ -344,6 +343,6 @@ if __name__ == '__main__':
 
     data_type = args.data_type
 
-    print(f'RUNNING PIPELINE WITH MODE: {mode}, DATA TYPE: {data_type} from SCRATCH\n') if scratch else print(f'RUNNING PIPELINE WITH MODE: {mode}, DATA TYPE: {data_type}, MODEL: {model} PRETRAINED\n')
+    print(f'RUNNING PIPELINE WITH MODE: {mode}, DATA TYPE: {data_type} from SCRATCH\n') if scratch else print(f'RUNNING PIPELINE WITH MODE: {mode}, DATA TYPE: {data_type}, PRETRAINED\n')
     
     run_full_pipeline(mode, data_type, scratch)

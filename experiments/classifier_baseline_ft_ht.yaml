@@ -4,10 +4,11 @@ data_path: "data/processed/baseline"
 
 
 model:
-  name: resnet18
+  name: resnet50
   pretrained: true
 
 training: #hyperparameter-tuning with random search
+  scratch: false
   ht: true
   layers: 2
   params:
@@ -15,4 +16,4 @@ training: #hyperparameter-tuning with random search
 
 best_config_run: false
 
-output_dir: results/classifier_on_baseline/ft_ht
+output_dir: results/NEW_classifier_on_baseline_RESNET50/ft_ht

@@ -3,10 +3,11 @@ experiment_name: baseline_freeze
 data_path: "data/processed/baseline"
 
 model:
-  name: resnet18
+  name: resnet50
   pretrained: true
 
 training:
+  scratch: false
   ht: false
   layers: false
   params:
@@ -16,4 +17,4 @@ training:
   
 best_config_run: false #use in hyperparameter tuning
 
-output_dir: results/classifier_on_baseline/freeze
+output_dir: results/NEW_classifier_on_baseline_RESNET50/freeze
