@@ -2,7 +2,7 @@ model:
   type: "cdcgan" 
   conditional: true
   generator:
-    latent_dim: 100
+    latent_dim: 100 #TUNED
     num_classes: 2  # benign=0, malignant=1
     n1: 512
     channels: 3
@@ -14,8 +14,8 @@ model:
     ndf: 64
     width: 128
     height: 128
-    n_layers: 4    
-    dropout: 0.3
+    n_layers: 4  #TUNED  
+    dropout: 0.3 #TUNED
     
 #PATCHGAN LAYERS DETERMINE PATCHES according to the following scheme:
 #n_layers	Output_Size	Receptive_Field	Patch_Coverage
@@ -24,11 +24,11 @@ model:
 #   5	         2×2	    ~Full image	    Similar to DCGAN
 
 training:
-  batch_size: 32
+  batch_size: 32 #TUNED
   epochs: 300
   g_lr: 0.0002 #lr TUNED
   d_lr: 0.0001 #lr TUNED
-  n_critic: 2
+  n_critic: 2 #TUNED
 
 generation:
   batch_size: 64
