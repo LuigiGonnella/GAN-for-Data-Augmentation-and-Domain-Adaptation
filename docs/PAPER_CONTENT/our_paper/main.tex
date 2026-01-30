@@ -70,13 +70,14 @@ Medical image classification in dermatology faces a critical challenge: severe c
 
 Traditional data augmentation techniques (geometric transformations, color jittering) provide limited benefit for extreme imbalance, as they merely rearrange existing pixels without introducing semantic diversity. This limitation is especially problematic in medical imaging where the minority class (malignant lesions) contains rare diagnostic patterns that classifiers must learn.
 
-We systematically investigate Generative Adversarial Networks (GANs) for synthetic data augmentation, evaluating DCGAN and cDCGAN architectures across four loss functions (Hinge, Wasserstein, BCE, MSE) on the ISIC skin lesion dataset. Our two-stage hyperparameter optimization establishes optimal configurations and evaluates their impact on classifier performance through quantitative metrics (FID) and visual assessment.
+We systematically investigate Generative Adversarial Networks (GANs) for synthetic data augmentation, evaluating DCGAN and cDCGAN architectures across four loss functions (Hinge, Wasserstein, BCE, MSE) on the ISIC skin lesion dataset. 
 
 \section{Dataset}
 
 \subsection{Data Source and Type}
 
 We utilize the ISIC dataset \cite{isic2019}: 17,000 dermoscopic images (15,000 benign, 2,000 malignant) exhibiting severe 7.5:1 class imbalance characteristic of real-world medical imaging. This binary classification task (benign vs. malignant) represents the primary challenge we address through synthetic augmentation.
+We selected this dataset for several key reasons: (1) it represents authentic clinical scenarios where malignant lesions are naturally rare, making it ideal for evaluating augmentation strategies under realistic data constraints; (2) it provides sufficient samples (2,000 malignant) to train GANs while being constrained enough to demonstrate clear augmentation benefits; (3) the well-curated nature and widespread adoption in dermatology research enable reproducible comparisons and validation of our findings.
 
 \subsection{Data Organization}
 
@@ -95,7 +96,7 @@ We utilize the ISIC dataset \cite{isic2019}: 17,000 dermoscopic images (15,000 b
 
 \subsection{Approach Overview}
 
-We implement two pipelines: (1) GAN generation and (2) classifier evaluation. Unlike prior work focusing on single architectures/losses, we systematically compare DCGAN and cDCGAN across four loss functions under severe data constraints (2,000 malignant samples). Two-stage hyperparameter optimization prioritizes learning rates before architecture choices, balancing computational cost and performance.
+We implement two pipelines: (1) GAN generation and (2) classifier evaluation. Unlike prior work focusing on single architectures/losses, we systematically compare DCGAN and cDCGAN across four loss functions under severe data constraints (2,000 malignant samples).
 
 \subsection{GAN Architecture}
 
@@ -104,13 +105,6 @@ We implement two GAN architectures selected for medical image synthesis: uncondi
 \subsubsection{DCGAN (Unconditional Generation)}
 
 DCGAN trains on minority class only (2,000 malignant samples), focusing on malignant patterns but with expected lower stability versus conditional variants.
-
-\begin{figure}[h]
-    \centering
-    \includegraphics[width=0.5\textwidth]{architecture/DCGAN_structure.png}
-    \caption{Schematic overview of the DCGAN architecture.}
-    \label{fig:dcgan_architecture}
-\end{figure}
 
 \textbf{Generator:} n-dim latent vector → 128×128 RGB via five transposed conv blocks (batch norm, ReLU), Tanh output [−1,1]. \\
 \textbf{Discriminator:} PatchGAN (7×7 patches) provides local feedback for spatial detail consistency. \cite{2017patchgan}
@@ -122,13 +116,6 @@ DCGAN trains on minority class only (2,000 malignant samples), focusing on malig
 \end{itemize}
 
 \subsubsection{cDCGAN (Conditional Generation)}
-
-\begin{figure}[htbp]
-    \centering
-    \includegraphics[width=0.5\textwidth]{architecture/cDCGAN_structure.png}
-    \caption{Schematic overview of the cDCGAN architecture.}
-    \label{fig:cdcgan_architecture}
-\end{figure}
 
 cDCGAN\cite{mirza2014conditional} trains on full dataset with class conditioning for improved stability. \\
 \textbf{Generator:} Class embedding concatenated with latent noise. \\
@@ -148,26 +135,42 @@ Margin-based (scores ≥1 real, ≤-1 fake) with stable gradients. \textbf{2. Wa
 
 \subsection{Hyperparameter Optimization Strategy}
 
-To balance search comprehensiveness with computational efficiency, we adopted a hierarchical two-stage optimization approach that prioritizes learning rates before fine-tuning architectural choices.
-
-
+To balance search comprehensiveness with computational efficiency, we adopted a hierarchical two-stage optimization approach that prioritizes learning rates before fine-tuning architectural choices. Finally, the best configuration was chosen according to the Combined Score with Classifier Recall (see \ref{gan_eval_metrics}).
 
 \subsubsection{Stage 1: Learning Rate Grid Search}
 
-We began with an exhaustive grid search systematically exploring generator and discriminator learning rates, considering all combinations. This generated four distinct configurations, each trained for 25 epochs and evaluated by FID score and classifier metrics at convergence. 
+We began with an exhaustive grid search systematically exploring generator and discriminator learning rates, considering all combinations\ref{tab:lr_configs}. This generated four distinct configurations, each trained for 25 epochs and evaluated by FID score and classifier metrics at convergence. 
 Examining both balanced scenarios (where g\_lr = d\_lr) and imbalanced scenarios enabled us to understand whether stable generator–discriminator competition requires symmetric learning rates. By prioritizing this parameter in a dedicated stage, we identified the most impactful hyperparameter without expensive full grid searches across dozens of configurations.
 
-The search revealed that optimal learning rates were g\_lr = 2×10⁻⁴ and d\_lr = 1×10⁻⁴ for both DCGAN and cDCGAN architectures.
+\begin{table}[h]
+\centering
+\begin{tabular}{cc}
+\hline
+\textbf{Generator LR} & \textbf{Discriminator LR} \\
+\hline
+$2 \times 10^{-4}$ & $2 \times 10^{-4}$ \\
+$1 \times 10^{-4}$ & $2 \times 10^{-4}$ \\
+$2 \times 10^{-4}$ & $1 \times 10^{-4}$ \\
+$1 \times 10^{-4}$ & $1 \times 10^{-4}$ \\
+$3 \times 10^{-4}$ & $3 \times 10^{-4}$ \\
+\hline
+\end{tabular}
+\caption{Learning rate configurations for generator and discriminator}
+\label{tab:lr_configs}
+\end{table}
+
+The search revealed that optimal learning rates were \textbf{g\_lr = $2 \times 10^{-4}$} and \textbf{d\_lr = $1 \times 10^{-4}$} for both DCGAN and cDCGAN architectures.
 
 \subsubsection{Stage 2: Architecture Parameter Random Search}
 
-With optimal learning rates established from Stage 1, we conducted a second optimization phase exploring architectural and regularization choices. Rather than exhaustive grid search over this larger search space, we employed random search by sampling 10 independent configurations, each trained for 25 epochs with FID evaluation at convergence. Hyperparameters were sampled from the following distribution: batch size in {32, 64}, latent dimension in {100, 128, 256}, number of convolutional blocks in {2, 3, 4}, dropout in {0.1, 0.3, 0.5}, and discriminator update ratio $n_{\mathrm{critic}}$ in {1, 2}. 
+With optimal learning rates established from Stage 1, we conducted a second optimization phase exploring architectural and regularization choices. Rather than exhaustive grid search over this larger search space, we employed random search by sampling 10 independent configurations, each trained for 25 epochs with FID evaluation at convergence. Hyperparameters were sampled from the following distribution: batch size in \textbf{\{32, 64\}}, latent dimension in \textbf{\{100, 128, 256\}}, number of convolutional blocks in \textbf{\{2, 3, 4\}}, dropout in \textbf{\{0.1, 0.3, 0.5\}}, and discriminator update ratio $n_{\mathrm{critic}}$ in \textbf{\{1, 2\}}. 
 
 Finally, we retrained the model using the selected best configuration for 300 epochs to obtain the final model.
 
 
 
 \subsubsection{GAN Evaluation Metrics}
+\label{gan_eval_metrics}
 
 To comprehensively evaluate GAN performance, we employed both quantitative metrics assessing sample quality and downstream classifier evaluation to ensure diagnostic relevance. 
 
@@ -184,7 +187,7 @@ This approach prioritizes diagnostic utility (recall, 60\% weight) while conside
 \subsection{Classifier Architecture and Training}
 
 For our classifier experiments, we employed a diverse set of architectures to thoroughly evaluate the impact of pre-training and architectural choices on medical image classification performance. Specifically, we utilized pre-trained models including ResNet-50 and ResNet-18, which benefited from ImageNet pre-training, allowing us to leverage rich feature representations learned from natural images. These pre-trained models underwent freezing (transfer learning), fine-tuning (ft) and hyperparameter tuning (ht) to adapt them effectively to our skin lesion classification task. Additionally, we included non-pre-trained variants such as AlexNet and ResNet-18, trained from scratch on our dataset, to assess the value of pre-training in this domain.
-Due to time and computational resource constraints, we could not perform a fully comprehensive hyperparameter tuning; however, we implemented a learning-rate scheduler (ReduceLROnPlateau) to automatically decrease the learning rate when the validation loss stopped improving. The fixed classifier training setup adopted across models is summarized in Table~\ref{tab:clf_fixed_cfg}.
+Due to time and computational resource constraints, we could not perform a fully comprehensive hyperparameter tuning; however, we implemented a learning-rate scheduler (ReduceLROnPlateau) to automatically decrease the learning rate when the validation loss stopped improving, setting a patience of 15 epochs. The fixed classifier training setup adopted across models is summarized in Table~\ref{tab:clf_fixed_cfg}.
 
 \begin{table}[h]
 \centering
@@ -212,7 +215,7 @@ For pretrained models, we first froze the backbone of each pre-trained model and
 Subsequently, we unfroze all layers for end-to-end training, enabling the model to refine its feature extraction capabilities for the specific characteristics of skin lesions. This approach balances computational efficiency with the need for domain adaptation.
 
 \subsubsection{Hyperparameter tuning}
-Hyperparameter tuning was conducted through a random search strategy, exploring a range of configurations including learning rates, batch sizes, weight decay, momentum, and optimizers, each trained for 3 epochs. The objective was to maximize validation recall, which is particularly critical in medical diagnosis where missing malignant cases can have severe consequences. After identifying the optimal configuration, the model was retrained for final evaluation on 10 epochs with early stopping strategy (with a patience of 3 epochs).
+Hyperparameter tuning was conducted through a random search strategy, exploring a range of configurations:  batch size in \textbf{\{32, 64\}}, weight decay in \textbf{\{0, $10^{-4}$, $10^{-5}$\}}, learning rate in \textbf{\{$10^{-3}$, $10^{-4}$, $5*10^{-4}$\}}, momentum in \textbf{\{0.9, 0.95\}}, optimizer in \textbf{\{'Adam', 'RMSProp', 'AdamW'\}}, each trained for 3 epochs. The objective was to maximize validation recall, which is particularly critical in medical diagnosis where missing malignant cases can have severe consequences. After identifying the optimal configuration, the model was retrained for final evaluation on 10 epochs with early stopping strategy (with a patience of 3 epochs).
 
 
 
@@ -299,20 +302,13 @@ IS & 2.03-2.32 & 3.1-3.7 \\
 \end{tabular}
 \end{table}
 
-Visual assessment of synthetic samples\ref{fig:cdcgan_samples} revealed striking similarities to real malignant lesions\ref{fig:real_samples}, with generated images exhibiting highly realistic skin textures, accurate color variations, and morphological features that closely matched authentic dermatoscopic patterns. 
+Visual assessment of synthetic samples\ref{fig:cdcgan_samples} revealed striking similarities to real malignant lesions, with generated images exhibiting highly realistic skin textures, accurate color variations, and morphological features that closely matched authentic dermatoscopic patterns. 
 
 \begin{figure}[h]
 \centering
 \includegraphics[width=0.69\linewidth]{results/gan_metrics/cDCGAN/final_samples_malignant.png}
 \caption{Synthetic malignant lesion samples generated by cDCGAN with hinge loss.}
 \label{fig:cdcgan_samples}
-\end{figure}
-
-\begin{figure}[h]
-\centering
-\includegraphics[width=0.69\linewidth]{results/gan_metrics/cDCGAN/photo_2026-01-27_20-06-24.jpg}
-\caption{Real malignant lesion samples.}
-\label{fig:real_samples}
 \end{figure}
 
 \subsection{Classifier on Baseline Dataset Performance}
@@ -406,14 +402,14 @@ For scratch-trained models, augmentation provided dramatic improvements over bas
 
 \begin{figure}[h]
 \centering
-\includegraphics[width=\linewidth]{results/loss_Alexnet_augmented.png}
+\includegraphics[width=0.75\linewidth]{results/loss_Alexnet_augmented.png}
 \caption{AlexNet cross-validation loss on augmented dataset}
 \label{fig:alexnet_loss}
 \end{figure}
 
 \begin{figure}[h]
 \centering
-\includegraphics[width=\linewidth]{results/pr_roc_curves.png}
+\includegraphics[width=0.85\linewidth]{results/pr_roc_curves.png}
 \caption{AlexNet PR-ROC curves to find optimal threshold}
 \label{fig:alexnet_pr_roc}
 \end{figure}
@@ -450,15 +446,7 @@ A critical concern when deploying synthetic data augmentation in medical imaging
 We deliberately excluded pretrained models to prevent prior domain knowledge from mitigating the domain gap implicitly. Training both models from random initialization allows a controlled evaluation of domain shift and highlights the contribution of the adversarial alignment mechanism introduced by DANN (Domain-Adversarial Neural Network).
 
 \subsubsection{Architecture}
-
-\begin{figure}[h]
-\centering
-\includegraphics[width=\linewidth]{architecture/DANN.png}
-\caption{High-level DANN architecture used for domain adaptation between source and target domains.}
-\label{fig:dann}
-\end{figure}
-
-As illustrated in Fig.~\ref{fig:dann}, a DANN consists of three main blocks: (i) a \textit{feature extractor} that maps an input image to a latent representation, (ii) a \textit{label predictor} trained to solve the supervised task on the source domain, and (iii) a \textit{domain classifier} trained to distinguish whether features come from the source or the target domain. Training is adversarial: the feature extractor is optimized to preserve class-discriminative information for the label predictor while simultaneously producing \emph{domain-invariant} features that confuse the domain classifier.
+A DANN consists of three main blocks: (i) a \textit{feature extractor} that maps an input image to a latent representation, (ii) a \textit{label predictor} trained to solve the supervised task on the source domain, and (iii) a \textit{domain classifier} trained to distinguish whether features come from the source or the target domain. Training is adversarial: the feature extractor is optimized to preserve class-discriminative information for the label predictor while simultaneously producing \emph{domain-invariant} features that confuse the domain classifier.
 
 The \textbf{Gradient Reversal Layer (GRL)} is the key mechanism enabling this adversarial objective without changing the network topology: during the forward pass it behaves as the identity, while during backpropagation it multiplies the gradient by a negative scalar (often $-\lambda$). This effectively reverses the domain classification gradient, forcing the feature extractor to learn representations that reduce the domain classifier accuracy and thereby mitigate the domain gap.
 
@@ -481,7 +469,7 @@ We trained the network using Adam with separate learning rates for the domain di
 
 \subsubsection{Results}
 
-Our domain adaptation experiments revealed a critical finding: despite near-perfect classification performance on the source domain (synthetic-only data), both scratch-trained models exhibited severe performance degradation when evaluated on the target domain (real data).
+Our domain adaptation experiments \ref{tab:domain_shift_results} revealed a critical finding: despite near-perfect classification performance on the source domain (synthetic-only data), both scratch-trained models exhibited severe performance degradation when evaluated on the target domain (real data).
 
 \begin{table}[h]
 \centering
