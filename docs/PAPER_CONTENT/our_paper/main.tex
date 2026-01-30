@@ -70,8 +70,6 @@ Medical image classification in dermatology faces a critical challenge: severe c
 
 Traditional data augmentation techniques (geometric transformations, color jittering) provide limited benefit for extreme imbalance, as they merely rearrange existing pixels without introducing semantic diversity. This limitation is especially problematic in medical imaging where the minority class (malignant lesions) contains rare diagnostic patterns that classifiers must learn.
 
-We systematically investigate Generative Adversarial Networks (GANs) for synthetic data augmentation, evaluating DCGAN and cDCGAN architectures across four loss functions (Hinge, Wasserstein, BCE, MSE) on the ISIC skin lesion dataset. 
-
 \section{Dataset}
 
 \subsection{Data Source and Type}
@@ -90,7 +88,8 @@ We selected this dataset for several key reasons: (1) it represents authentic cl
 
 \subsection{Preprocessing}
 
-\textbf{GAN:} 128×128 pixels, [−1,1] scaling, light augmentation (flips, rotations ≤20°, color jitter). \textbf{Classifier:} 224×224 pixels, ImageNet normalization, augmentation (flips, rotations ≤20°, color jitter). Dataset challenges include variable lighting, acquisition artifacts, and severe 7.5:1 imbalance driving majority class bias.
+\textbf{GAN:} 128×128 pixels, [−1,1] scaling, light augmentation (flips, rotations ≤20°, color jitter). \\
+\textbf{Classifier:} 224×224 pixels, ImageNet normalization, augmentation (flips, rotations ≤20°, color jitter). Dataset challenges include variable lighting, acquisition artifacts, and severe 7.5:1 imbalance driving majority class bias.
 
 \section{Methods}
 
@@ -123,7 +122,7 @@ cDCGAN\cite{mirza2014conditional} trains on full dataset with class conditioning
 
 \subsection{Loss Functions}
 
-We systematically evaluate four loss functions, each with distinct training properties:
+We evaluate four loss functions, each with distinct training properties:
 
 \textbf{1. Hinge Loss with Spectral Normalization} \cite{miyato2018spectral} (Primary choice):
 \begin{align}
@@ -131,7 +130,9 @@ We systematically evaluate four loss functions, each with distinct training prop
 &\quad + \mathbb{E}_{z \sim p_z}[\max(0, 1 + D(G(z)))] \\
 \mathcal{L}_G &= -\mathbb{E}_{z \sim p_z}[D(G(z))]
 \end{align}
-Margin-based (scores ≥1 real, ≤-1 fake) with stable gradients. \textbf{2. Wasserstein:} Distance estimation requiring gradient penalty tuning. \textbf{3. BCE:} Original formulation with vanishing gradient issues. \textbf{4. MSE:} Stronger early gradients but mode collapse prone.
+Margin-based (scores ≥1 real, ≤-1 fake) with stable gradients. \\
+\textbf{2. Wasserstein:} Distance estimation requiring gradient penalty tuning. \\ \textbf{3. BCE:} Original formulation with vanishing gradient issues. \\
+\textbf{4. MSE:} Stronger early gradients but mode collapse prone.
 
 \subsection{Hyperparameter Optimization Strategy}
 
@@ -139,7 +140,7 @@ To balance search comprehensiveness with computational efficiency, we adopted a 
 
 \subsubsection{Stage 1: Learning Rate Grid Search}
 
-We began with an exhaustive grid search systematically exploring generator and discriminator learning rates, considering all combinations\ref{tab:lr_configs}. This generated four distinct configurations, each trained for 25 epochs and evaluated by FID score and classifier metrics at convergence. 
+We began with an exhaustive grid search exploring generator and discriminator learning rates, considering all combinations\ref{tab:lr_configs}. This generated four distinct configurations, each trained for 25 epochs and evaluated by FID score and classifier metrics at convergence. 
 Examining both balanced scenarios (where g\_lr = d\_lr) and imbalanced scenarios enabled us to understand whether stable generator–discriminator competition requires symmetric learning rates. By prioritizing this parameter in a dedicated stage, we identified the most impactful hyperparameter without expensive full grid searches across dozens of configurations.
 
 \begin{table}[h]
@@ -163,11 +164,9 @@ The search revealed that optimal learning rates were \textbf{g\_lr = $2 \times 1
 
 \subsubsection{Stage 2: Architecture Parameter Random Search}
 
-With optimal learning rates established from Stage 1, we conducted a second optimization phase exploring architectural and regularization choices. Rather than exhaustive grid search over this larger search space, we employed random search by sampling 10 independent configurations, each trained for 25 epochs with FID evaluation at convergence. Hyperparameters were sampled from the following distribution: batch size in \textbf{\{32, 64\}}, latent dimension in \textbf{\{100, 128, 256\}}, number of convolutional blocks in \textbf{\{2, 3, 4\}}, dropout in \textbf{\{0.1, 0.3, 0.5\}}, and discriminator update ratio $n_{\mathrm{critic}}$ in \textbf{\{1, 2\}}. 
+With optimal learning rates established from Stage 1, we conducted a second optimization phase exploring architectural and regularization choices. Rather than exhaustive grid search over this larger search space, we employed random search by sampling 10 independent configurations, each trained for 25 epochs with FID evaluation and classifier metrics at convergence. Hyperparameters were sampled from the following distribution: batch size in \textbf{\{32, 64\}}, latent dimension in \textbf{\{100, 128, 256\}}, number of convolutional blocks in \textbf{\{2, 3, 4\}}, dropout in \textbf{\{0.1, 0.3, 0.5\}}, and discriminator update ratio $n_{\mathrm{critic}}$ in \textbf{\{1, 2\}}. 
 
 Finally, we retrained the model using the selected best configuration for 300 epochs to obtain the final model.
-
-
 
 \subsubsection{GAN Evaluation Metrics}
 \label{gan_eval_metrics}
@@ -186,8 +185,9 @@ This approach prioritizes diagnostic utility (recall, 60\% weight) while conside
 
 \subsection{Classifier Architecture and Training}
 
-For our classifier experiments, we employed a diverse set of architectures to thoroughly evaluate the impact of pre-training and architectural choices on medical image classification performance. Specifically, we utilized pre-trained models including ResNet-50 and ResNet-18, which benefited from ImageNet pre-training, allowing us to leverage rich feature representations learned from natural images. These pre-trained models underwent freezing (transfer learning), fine-tuning (ft) and hyperparameter tuning (ht) to adapt them effectively to our skin lesion classification task. Additionally, we included non-pre-trained variants such as AlexNet and ResNet-18, trained from scratch on our dataset, to assess the value of pre-training in this domain.
-Due to time and computational resource constraints, we could not perform a fully comprehensive hyperparameter tuning; however, we implemented a learning-rate scheduler (ReduceLROnPlateau) to automatically decrease the learning rate when the validation loss stopped improving, setting a patience of 15 epochs. The fixed classifier training setup adopted across models is summarized in Table~\ref{tab:clf_fixed_cfg}.
+For our classifier experiments, we employed a diverse set of architectures to thoroughly evaluate the impact of pre-training and architectural choices on medical image classification performance. Specifically, we utilized pre-trained models including ResNet-50 and ResNet-18, which benefited from ImageNet pre-training, allowing us to leverage rich feature representations learned from natural images. These pre-trained models underwent freezing (transfer learning), fine-tuning (ft) and hyperparameter tuning (ht) to adapt them effectively to our skin lesion classification task. Additionally, we included non pre-trained variants such as AlexNet and ResNet-18, trained from scratch on our dataset, to assess the value of GAN synthetic images in this domain.
+Due to time and computational resource constraints, we could not perform a fully comprehensive hyperparameter tuning; however, we implemented a learning-rate scheduler (ReduceLROnPlateau) to automatically decrease the learning rate when the validation loss stopped improving, setting a patience of 15 epochs. The objective was to maximize validation recall, which is particularly critical in medical diagnosis where missing malignant cases can have severe consequences.
+The fixed classifier training setup adopted across models is summarized in Table~\ref{tab:clf_fixed_cfg}.
 
 \begin{table}[h]
 \centering
@@ -209,42 +209,38 @@ optimizer & Adam \\
 
 
 \subsubsection{Transfer Learning}
-For pretrained models, we first froze the backbone of each pre-trained model and trained only the classification head, preserving the learned representations while adapting the network to our binary classification task.
+For pre-trained models, we first froze the backbone of each pre-trained model and trained only the classification head, preserving the learned representations while adapting the network to our binary classification task.
 
 \subsubsection{Fine-tuning}
-Subsequently, we unfroze all layers for end-to-end training, enabling the model to refine its feature extraction capabilities for the specific characteristics of skin lesions. This approach balances computational efficiency with the need for domain adaptation.
+Subsequently, we unfroze all layers (except the first) for end-to-end training, enabling the model to refine its feature extraction capabilities for the specific characteristics of skin lesions. This approach balances computational efficiency with the need for domain adaptation.
 
 \subsubsection{Hyperparameter tuning}
-Hyperparameter tuning was conducted through a random search strategy, exploring a range of configurations:  batch size in \textbf{\{32, 64\}}, weight decay in \textbf{\{0, $10^{-4}$, $10^{-5}$\}}, learning rate in \textbf{\{$10^{-3}$, $10^{-4}$, $5*10^{-4}$\}}, momentum in \textbf{\{0.9, 0.95\}}, optimizer in \textbf{\{'Adam', 'RMSProp', 'AdamW'\}}, each trained for 3 epochs. The objective was to maximize validation recall, which is particularly critical in medical diagnosis where missing malignant cases can have severe consequences. After identifying the optimal configuration, the model was retrained for final evaluation on 10 epochs with early stopping strategy (with a patience of 3 epochs).
-
-
+Hyperparameter tuning was conducted, only on finetuned models, through a random search strategy, exploring a range of configurations:  batch size in \textbf{\{32, 64\}}, weight decay in \textbf{\{0, $10^{-4}$, $10^{-5}$\}}, learning rate in \textbf{\{$10^{-3}$, $10^{-4}$, $5*10^{-4}$\}}, momentum in \textbf{\{0.9, 0.95\}}, optimizer in \textbf{\{'Adam', 'RMSProp', 'AdamW'\}}, each trained for 3 epochs. As well as non pre-trained classifiers, the objective was to maximize validation recall. The model was retrained for final evaluation on 10 epochs with early stopping strategy (with a patience of 3 epochs).
 
 \subsubsection{Evaluation Metrics}
 To comprehensively assess classifier performance, we employed a suite of evaluation metrics tailored to the imbalanced nature of our dataset. 
 \begin{itemize}
-    \item Accuracy: provided an overall measure of correctness;
-    \item Precision: captured the reliability of positive predictions;
-    \item Recall: was emphasized as it quantifies the model's ability to detect malignant lesions—a key metric for clinical utility;
-    \item F1-Score: offered a balanced harmonic mean of precision and recall;
-    \item ROC-AUC: evaluated the model's discriminative ability across various thresholds;
-    \item Confusion matrices: enabled detailed error analysis, revealing patterns in misclassifications.
+    \item \textbf{Accuracy}: provided an overall measure of correctness;
+    \item \textbf{Precision}: captured the reliability of positive predictions;
+    \item \textbf{Recall}: was emphasized as it quantifies the model's ability to detect malignant lesions—a key metric for clinical utility;
+    \item \textbf{F1-Score}: offered a balanced harmonic mean of precision and recall;
+    \item \textbf{ROC-AUC}: evaluated the model's discriminative ability across various thresholds;
+    \item \textbf{Confusion matrices}: enabled detailed error analysis, revealing patterns in misclassifications.
 \end{itemize}
 
 \subsubsection{Threshold Optimization}
-During training, we continuously monitored performance on the validation set (tracking training/validation losses and evaluating predictions with the default threshold of 0.5) and saved the checkpoint that maximized validation recall (sensitivity), which is particularly important in medical screening settings.
+During training, we continuously monitored performance on the validation set (tracking training/validation losses and evaluating predictions with the default threshold of 0.5) and saved the checkpoint that maximized validation recall (sensitivity), as described before.
 
 After training, we performed an explicit threshold tuning step on the validation set and selected the threshold that maximized the F1-score. Empirically, this criterion provided the best trade-off: it increased recall while avoiding degenerate solutions that classify an excessive number of samples as positive.
 
 Finally, we reported PR and ROC curves to visualize the precision--recall/threshold trade-offs and highlight the selected operating point. The resulting optimal threshold was then applied to the held-out test set, where we summarized performance and reported the confusion matrix.
 
-
 \section{Experiments}
 
 \subsection{GAN Training Results}
 
-We performed extensive experiments for both DCGAN and cDCGAN, systematically exploring architectural choices and training hyperparameters under multiple adversarial objectives (Hinge, Wasserstein-GP, BCE, and MSE). In line with state-of-the-art practice for medical image synthesis, the best-performing configuration for both models used \textbf{Hinge loss} with \textbf{Spectral Normalization} applied to the \textbf{PatchGAN discriminator}, which provided the most stable training dynamics and the best trade-off between fidelity and diversity.
+We performed extensive experiments for both DCGAN and cDCGAN, exploring architectural choices and training hyperparameters under multiple adversarial objectives (Hinge, Wasserstein-GP, BCE, and MSE). In line with state-of-the-art practice for medical image synthesis, the best-performing configuration for both models used \textbf{Hinge loss} with \textbf{Spectral Normalization} applied to the \textbf{PatchGAN discriminator}, which provided the most stable training dynamics and the best trade-off between fidelity and diversity.
 
-The hyperparameter tuning process incorporated both quantitative GAN metrics (FID scores) and downstream classifier performance (recall on malignant lesions) to ensure synthetic samples were both high-quality and diagnostically relevant.
 
 \begin{table}[h]
 \centering
@@ -286,7 +282,7 @@ $n_{\mathrm{critic}}$ & 2 \\
 \end{tabular}
 \end{table}
 
-Overall, the tuned cDCGAN outperformed the tuned DCGAN in key metrics, as expected: conditioning and training on the full dataset provide a stronger learning signal and typically improve stability and sample diversity. The training dynamics\ref{tab:classifier_results} for our final models showed successful adversarial equilibrium, with generator and discriminator losses converging to stable values by epoch 50.
+Overall, the tuned cDCGAN\ref{tab:cdcgan_best_cfg} outperformed the tuned DCGAN\ref{tab:dcgan_best_cfg} in key metrics, as expected: conditioning and training on the full dataset provide a stronger learning signal and typically improve stability and sample diversity. The training dynamics\ref{tab:classifier_results} for our final models showed successful adversarial equilibrium, with generator and discriminator losses converging to stable values by epoch 50.
 
 \begin{table}[h]
 \centering
@@ -313,7 +309,7 @@ Visual assessment of synthetic samples\ref{fig:cdcgan_samples} revealed striking
 
 \subsection{Classifier on Baseline Dataset Performance}
 
-We evaluated classifier performance on the non-augmented baseline dataset across multiple architectures to establish a starting point for augmentation studies. Our experimental design compared pre-trained models (leveraging ImageNet knowledge), using a three-stage training methodology, against non-pre-trained models (learning from scratch). 
+We evaluated classifier performance on the non augmented baseline dataset across multiple architectures to establish a starting point for augmentation studies. Our experimental design compared pre-trained models (leveraging ImageNet knowledge), using the three-stage training methodology already described, against non pre-trained models (learning from scratch). 
 
 \subsubsection{Pre-trained Models: ResNet50 and ResNet18}
 
@@ -340,14 +336,11 @@ Table~\ref{tab:pretrained_baseline} presents the baseline performance of both pr
 \end{tabular}
 \end{table}
 
-\subsubsection{Non-Pre-trained Models: AlexNet and ResNet18 from Scratch}
+\subsubsection{Non Pre-trained Models: AlexNet and ResNet18 from Scratch}
 
-To rigorously evaluate the impact of synthetic augmentation on classifier performance, we intentionally included non-pre-trained baseline models trained from scratch. Our motivation for this choice reflects a critical experimental consideration: the pre-trained models (ResNet50 and ResNet18) already achieve strong baseline performance (85-92\% accuracy, 52-83\% recall), leaving relatively limited room for demonstrating augmentation improvements. By training architecturally identical models from random initialization without ImageNet pre-training, we establish weaker baselines against which the improvements from GAN-based augmentation become more pronounced and statistically meaningful. This approach enables us to more clearly demonstrate the magnitude of benefit that synthetic data augmentation provides, particularly for improving recall on malignant lesions where even modest improvements translate to clinically meaningful reductions in false negatives.
+To rigorously evaluate the impact of synthetic augmentation on classifier performance, we intentionally included non pre-trained baseline models trained from scratch. Our motivation for this choice reflects a critical experimental consideration: the pre-trained models (ResNet50 and ResNet18) already achieve strong baseline performance (85-92\% accuracy, 52-83\% recall), leaving relatively limited room for demonstrating augmentation improvements. By training architecturally identical models from random initialization without ImageNet pre-training, we establish weaker baselines against which the improvements from GAN-based augmentation become more pronounced and statistically meaningful. This approach enables us to more clearly demonstrate the magnitude of benefit that synthetic data augmentation provides, particularly for improving recall on malignant lesions where even modest improvements translate to clinically meaningful reductions in false negatives.
 
-Table~\ref{tab:nopretrained_baseline} presents the baseline performance of non-pre-trained architectures, revealing the dramatic performance degradation when training without ImageNet initialization.
-
-
-
+Table~\ref{tab:nopretrained_baseline} presents the baseline performance of non pre-trained architectures, revealing the dramatic performance degradation when training without ImageNet initialization.
 
 \begin{table}[h]
 \centering
@@ -365,7 +358,7 @@ ResNet18 & 83.73\% & 37.36\% & 56.67\% & 0.45 \\
 
 \subsection{Classifier Performance on Augmented Data}
 
-To evaluate the effectiveness of GAN-based synthetic augmentation, we trained classifiers on the augmented dataset, with a training set composed of the baseline (real) images with other 3000 synthetic malignant samples generated by  the optimal GAN configurations. In this way, we reduced the imbalance from 7.5:1 to ~ 2.39:1. Then we evaluated them on the same validation and test images of the baseline dataset (only containing real samples). We used identical model architectures and training pipelines as baseline experiments to enable direct comparison. Since the pre-trained ResNet18 already achieved strong performance with DCGAN augmentation, we did not extend the ResNet18 evaluation to cDCGAN; instead, we shifted the remaining analysis to scratch-trained classifiers, where the impact of higher-quality cDCGAN samples is more clearly observable.
+To evaluate the effectiveness of GAN-based synthetic augmentation, we trained classifiers on the augmented dataset, with a training set composed of the baseline (real) images with other 3000 synthetic malignant samples generated by  the optimal GAN configurations. In this way, we reduced the imbalance from 7.5:1 to near 2.39:1. Then we evaluated them on the same validation and test images of the baseline dataset (only containing real samples). We used identical model architectures and training pipelines as baseline experiments to enable direct comparison. Since the pre-trained ResNet18 already achieved strong performance with DCGAN augmentation, we did not extend the ResNet18 evaluation to cDCGAN; instead, we shifted the remaining analysis to scratch-trained classifiers, where the impact of higher-quality cDCGAN samples is more clearly observable.
 
 \subsubsection{Pre-trained Models on Augmented Data}
 
@@ -396,7 +389,7 @@ Table~\ref{tab:augmented_pretrained} presents augmented performance for ResNet50
 }
 \end{table}
 
-\subsubsection{Non-Pre-trained Models on Augmented Data}
+\subsubsection{Non Pre-trained Models on Augmented Data}
 
 For scratch-trained models, augmentation provided dramatic improvements over baseline performance. Table~\ref{tab:augmented_scratch} demonstrates the transformative effect of synthetic data when training models from random initialization. The best example is provided by AlexNet~\ref{fig:alexnet_loss}~\ref{fig:alexnet_pr_roc}
 
@@ -443,12 +436,12 @@ Non pre-trained models exhibited the most pronounced benefits from synthetic aug
 \subsection{Domain Adaptation Analysis}
 
 A critical concern when deploying synthetic data augmentation in medical imaging is the domain gap between real and synthetic samples. To assess whether synthetic malignant lesions genuinely improved classifiers or introduced distribution shift, we conducted domain adaptation analysis by training classifiers on synthetic-only data and evaluating on real test samples. This experiment reveals the diagnostic utility of our synthetic samples beyond simple statistical realism.
-We deliberately excluded pretrained models to prevent prior domain knowledge from mitigating the domain gap implicitly. Training both models from random initialization allows a controlled evaluation of domain shift and highlights the contribution of the adversarial alignment mechanism introduced by DANN (Domain-Adversarial Neural Network).
+We deliberately excluded pre-trained models to prevent prior domain knowledge from mitigating the domain gap implicitly. Training both models from random initialization allows a controlled evaluation of domain shift and highlights the contribution of the adversarial alignment mechanism introduced by DANN (Domain-Adversarial Neural Network).
 
 \subsubsection{Architecture}
 A DANN consists of three main blocks: (i) a \textit{feature extractor} that maps an input image to a latent representation, (ii) a \textit{label predictor} trained to solve the supervised task on the source domain, and (iii) a \textit{domain classifier} trained to distinguish whether features come from the source or the target domain. Training is adversarial: the feature extractor is optimized to preserve class-discriminative information for the label predictor while simultaneously producing \emph{domain-invariant} features that confuse the domain classifier.
 
-The \textbf{Gradient Reversal Layer (GRL)} is the key mechanism enabling this adversarial objective without changing the network topology: during the forward pass it behaves as the identity, while during backpropagation it multiplies the gradient by a negative scalar (often $-\lambda$). This effectively reverses the domain classification gradient, forcing the feature extractor to learn representations that reduce the domain classifier accuracy and thereby mitigate the domain gap.
+The \textbf{Gradient Reversal Layer (GRL)} is the key mechanism enabling this adversarial objective without changing the network topology: during the forward pass it behaves as the identity, while during backpropagation it multiplies the gradient by a negative scalar ($-\lambda$). This effectively reverses the domain classification gradient, forcing the feature extractor to learn representations that reduce the domain classifier accuracy and thereby mitigate the domain gap.
 
 \subsubsection{Training}
 
@@ -523,7 +516,17 @@ Despite these challenges, our systematic investigation yielded valuable insights
 
 \textbf{Optimal GAN Configuration:} The cDCGAN architecture with hinge loss and spectral normalization was the best-performing configuration, achieving the lowest FID (193.49).
 
-\textbf{Augmentation Effectiveness with Mixed Training:} Synthetic augmentation produced dramatic improvements when combined with real data—ResNet18 scratch recall improved +23.66\% (56.67\% → 80.33\%), AlexNet recovered from pathological failure (11.76\% → 84.98\% accuracy). Pre-trained models showed meaningful gains: ResNet50 recall +18\% (60.33\% → 78.33\% with cDCGAN), demonstrating augmentation's value across training paradigms.
+\textbf{Augmentation Effectiveness with Mixed Training:} Synthetic augmentation produced dramatic improvements when combined with real data especially on AlexNet that recovered from pathological failure.
+
+\textbf{Hierarchical Hyperparameter Optimization Effectiveness:} A two-stage optimization (learning rates followed by architectural parameters) identified an asymmetric optimal learning-rate ratio (generator:discriminator - 2:1), reflecting the need for faster generator updates in high-detail dermoscopic images. This hierarchical strategy reduced computational cost by 60\% compared to full grid search while achieving comparable performance, confirming the dominant role of learning rates in GAN training dynamics.
+
+\textbf{Loss Function Stability Hierarchy:} Across both architectures, we observed consistent performance ranking: Hinge + Spectral Normalization (optimal) > Wasserstein-GP (stable but computationally expensive) > MSE/BCE (mode collapse). 
+
+\textbf{Threshold Optimization Critical for Imbalanced Tasks:} Post-training threshold tuning based on validation F1 consistently improved recall (5–15\%) without severe precision loss. This two-stage strategy highlights the suboptimality of default decision thresholds for imbalanced medical screening tasks, where false negatives carry asymmetric costs.
+
+\textbf{Domain Adaptation Failure—DANN Ineffectiveness:} Adversarial domain adaptation (DANN with GRL) failed to bridge the synthetic-to-real gap: target accuracy remained low (30–39\%) despite near-perfect source performance, and training destabilized as $\lambda$ exceeded 0.6 (15–20 epochs). This indicates that feature-level alignment is insufficient when domain shifts stem from fundamental generation differences (GAN artifacts vs. optical acquisition), highlighting limits of domain adaptation theory—largely developed for real-to-real transfer—in GAN-to-camera medical imaging scenarios.
+
+\textbf{Evaluation Metric Limitations—FID/IS Misleading Indicators:} FID occasionally showed weak correlation with downstream performance, with higher-FID DCGANs (800–900) sometimes achieving better classifier recall than lower-FID models (700–750), indicating that ImageNet-based FID and Inception Score poorly reflect medical image quality. This motivated a combined metric incorporating classifier recall and highlights the broader lack of domain-specific GAN evaluation metrics in medical imaging, often requiring costly classifier training.
 
 \subsection{Future Work}
 
