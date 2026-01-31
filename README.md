@@ -259,10 +259,14 @@ python evaluation/domain_shift_evaluation.py --model_type dann --source_data syn
 4. Fréchet Inception Distance (FID) evaluation metric
 5. ISIC Skin Lesion Archive publications
 
+## License
+[LICENSE](/LICENSE)
+
+
 ## Contributors
 
-- **Dorotea Monaco** (s349653@studenti.polito.it) - Politecnico di Torino
-- **Luigi Gonnella** (s341988@studenti.polito.it) - Politecnico di Torino
+- **Dorotea Monaco** (dorotea.monaco@studenti.polito.it) - Politecnico di Torino
+- **Luigi Gonnella** (luigi.gonnella@studenti.polito.it) - Politecnico di Torino
 
 ## Acknowledgments
 
