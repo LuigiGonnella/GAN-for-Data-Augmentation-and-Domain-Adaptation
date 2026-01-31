@@ -260,7 +260,7 @@ python evaluation/domain_shift_evaluation.py --model_type dann --source_data syn
 5. ISIC Skin Lesion Archive publications
 
 ## License
-[LICENSE](/LICENSE)
+Click [here](/LICENSE) to see full details.
 
 
 ## Contributors
